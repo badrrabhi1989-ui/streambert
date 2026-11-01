@@ -613,6 +613,8 @@ object StreambertEngine {
             intent.putExtra("subtitle", args.optString("subtitle"))
             intent.putExtra("sources", (args.optJSONArray("sources") ?: JSONArray()).toString())
             intent.putExtra("startMs", args.optLong("startMs", 0L))
+            intent.putExtra("handoff", args.optString("handoff"))
+            intent.putExtra("audioLang", args.optString("audioLang"))
             val direct = args.optString("directUrl")
             if (direct.isNotBlank()) intent.putExtra("directUrl", direct)
             try {
@@ -837,29 +839,33 @@ object StreambertEngine {
     private fun openStream(args: JSONObject): JSONObject {
         val url = args.optString("url")
         if (!url.startsWith("http")) return JSONObject().put("ok", false).put("error", "Invalid stream URL")
-        val title = args.optString("title")
-        val pm = app.packageManager
-        val vlc = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "video/*")
-            setPackage("org.videolan.vlc")
-            putExtra("title", title)
-            if (args.optString("referer").isNotBlank()) putExtra("http-referrer", args.optString("referer"))
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val headers = linkedMapOf<String, String>()
+        val ua = args.optString("userAgent")
+        val referer = args.optString("referer")
+        val origin = args.optString("origin")
+        if (ua.isNotBlank()) headers["User-Agent"] = ua
+        if (referer.isNotBlank()) headers["Referer"] = referer
+        if (origin.isNotBlank()) headers["Origin"] = origin
+        val subs = ArrayList<String>()
+        val one = args.optString("subtitle")
+        if (one.isNotBlank()) subs.add(one)
+        val extra = args.optJSONArray("subtitles")
+        if (extra != null) {
+            for (i in 0 until extra.length()) {
+                val sub = extra.optString(i)
+                if (sub.isNotBlank() && sub !in subs) subs.add(sub)
+            }
         }
-        if (vlc.resolveActivity(pm) != null) {
-            app.startActivity(vlc)
-            return JSONObject().put("ok", true).put("player", "vlc")
-        }
-        val generic = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "application/vnd.apple.mpegurl")
-            putExtra("title", title)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        if (generic.resolveActivity(pm) != null) {
-            app.startActivity(Intent.createChooser(generic, "Open stream").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            return JSONObject().put("ok", true).put("player", "android")
-        }
-        return JSONObject().put("ok", false).put("error", "No external player found. Install mpv or VLC and try again.")
+        val opened = ExternalPlayer.open(
+            app,
+            url,
+            args.optString("title"),
+            headers,
+            subs,
+            args.optLong("positionMs", 0L),
+        )
+        return if (opened) JSONObject().put("ok", true).put("player", "android")
+        else JSONObject().put("ok", false).put("error", "No external player found. Install VLC, MX Player, or Just Player.")
     }
 
     private fun showInFolder(args: JSONObject): JSONObject {

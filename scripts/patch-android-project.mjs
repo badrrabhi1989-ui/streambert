@@ -21,7 +21,7 @@ let rootText = fs.readFileSync(rootGradle, "utf8");
 if (!rootText.includes("kotlin-gradle-plugin")) {
   rootText = rootText.replace(
     "classpath 'com.android.tools.build:gradle:8.7.2'\n",
-    "classpath 'com.android.tools.build:gradle:8.7.2'\n        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'\n",
+    "classpath 'com.android.tools.build:gradle:8.7.2'\n        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.10'\n",
   );
   fs.writeFileSync(rootGradle, rootText);
 }
@@ -41,16 +41,24 @@ if (!app.includes("jvmTarget")) {
     "    kotlinOptions {\n        jvmTarget = '21'\n    }\n    buildTypes {",
   );
 }
+app = app.replace(/androidx\.media3:(media3-[a-z0-9-]+):1\.5\.1/g, "androidx.media3:$1:1.11.1");
+if (app.includes("media3-ui:1.11.1") && !app.includes("nextlib-media3ext")) {
+  app = app.replace(
+    '    implementation "androidx.media3:media3-ui:1.11.1"\n',
+    '    implementation "androidx.media3:media3-ui:1.11.1"\n    implementation "io.github.anilbeesetti:nextlib-media3ext:1.11.1-0.17.0"\n',
+  );
+}
 if (!app.includes("media3-exoplayer")) {
   app = app.replace(
     '    implementation "androidx.documentfile:documentfile:1.0.1"\n',
     [
       '    implementation "androidx.documentfile:documentfile:1.0.1"',
-      '    implementation "androidx.media3:media3-exoplayer:1.5.1"',
-      '    implementation "androidx.media3:media3-exoplayer-hls:1.5.1"',
-      '    implementation "androidx.media3:media3-exoplayer-dash:1.5.1"',
-      '    implementation "androidx.media3:media3-datasource:1.5.1"',
-      '    implementation "androidx.media3:media3-ui:1.5.1"',
+      '    implementation "androidx.media3:media3-exoplayer:1.11.1"',
+      '    implementation "androidx.media3:media3-exoplayer-hls:1.11.1"',
+      '    implementation "androidx.media3:media3-exoplayer-dash:1.11.1"',
+      '    implementation "androidx.media3:media3-datasource:1.11.1"',
+      '    implementation "androidx.media3:media3-ui:1.11.1"',
+      '    implementation "io.github.anilbeesetti:nextlib-media3ext:1.11.1-0.17.0"',
       "",
     ].join("\n"),
   );
@@ -78,6 +86,17 @@ fs.writeFileSync(
 
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
+        <package android:name="org.videolan.vlc" />
+        <package android:name="com.mxtech.videoplayer.pro" />
+        <package android:name="com.mxtech.videoplayer.ad" />
+        <package android:name="com.brouken.player" />
+    </queries>
 
     <application
         android:allowBackup="true"

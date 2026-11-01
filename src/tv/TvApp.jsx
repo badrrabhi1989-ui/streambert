@@ -1,18 +1,38 @@
 import { useEffect, useRef, useState } from "react";
-import { PLAYER_SOURCES, fetchImdbId, getSourceUrl, imgUrl, tmdbFetch } from "../utils/api";
+import { fetchAnilistData, fetchImdbId, getAnimeSourceUrl, getSourceUrl, imgUrl, tmdbFetch, PLAYER_SOURCES } from "../utils/api";
 import { secureStorage } from "../utils/storage";
 import PhoneKeyPairing from "../components/PhoneKeyPairing";
+import { directionFromKey, isActivateKey, pickNext } from "./tvFocus";
 import "./tv.css";
 
 const SHELF = "emberlane-shelf";
+const PLAYER_PREF = "reelix-player";
+const AUDIO_PREF = "reelix-audio-lang";
 const PREFER = ["vidrift", "vidsrc", "vidfast", "vidlove", "aether", "vidnest", "frembed"];
+const AUDIO_LANGS = [
+  ["", "Default"],
+  ["en", "English"],
+  ["ar", "Arabic"],
+  ["fr", "French"],
+  ["es", "Spanish"],
+  ["de", "German"],
+  ["pt", "Portuguese"],
+  ["it", "Italian"],
+  ["tr", "Turkish"],
+  ["hi", "Hindi"],
+  ["ja", "Japanese"],
+  ["ko", "Korean"],
+  ["zh", "Chinese"],
+  ["ru", "Russian"],
+  ["pl", "Polish"],
+];
 const RAIL = [
-  ["home", "Home"],
-  ["movies", "Movies"],
-  ["series", "Series"],
-  ["search", "Search"],
-  ["library", "Library"],
-  ["settings", "Settings"],
+  ["home", "Home", HomeIcon],
+  ["movies", "Movies", MovieIcon],
+  ["series", "Series", SeriesIcon],
+  ["search", "Search", SearchIcon],
+  ["library", "Library", LibraryIcon],
+  ["settings", "Settings", SettingsIcon],
 ];
 
 function loadShelf() {
@@ -26,8 +46,7 @@ function loadShelf() {
 
 function remember(entry) {
   const list = loadShelf().filter(
-    (item) =>
-      !(item.id === entry.id && item.type === entry.type && item.season === entry.season && item.episode === entry.episode),
+    (item) => !(item.id === entry.id && item.type === entry.type && item.season === entry.season && item.episode === entry.episode),
   );
   list.unshift(entry);
   localStorage.setItem(SHELF, JSON.stringify(list.slice(0, 24)));
@@ -38,41 +57,42 @@ function visible(el) {
   return r.width > 0 && r.height > 0;
 }
 
-function moveFocus(key) {
-  const items = [...document.querySelectorAll(".tv-item")].filter(visible);
-  const current = document.activeElement;
-  if (!items.includes(current)) {
-    items[0]?.focus();
-    return;
-  }
-  const box = current.getBoundingClientRect();
-  const cx = box.left + box.width / 2;
-  const cy = box.top + box.height / 2;
-  let best = null;
-  let bestScore = Infinity;
-  for (const el of items) {
-    if (el === current) continue;
-    const b = el.getBoundingClientRect();
-    const dx = b.left + b.width / 2 - cx;
-    const dy = b.top + b.height / 2 - cy;
-    if (key === "ArrowLeft" && dx >= -4) continue;
-    if (key === "ArrowRight" && dx <= 4) continue;
-    if (key === "ArrowUp" && dy >= -4) continue;
-    if (key === "ArrowDown" && dy <= 4) continue;
-    const primary = key === "ArrowLeft" || key === "ArrowRight" ? Math.abs(dx) : Math.abs(dy);
-    const secondary = key === "ArrowLeft" || key === "ArrowRight" ? Math.abs(dy) : Math.abs(dx);
-    const score = primary + secondary * 2.4;
-    if (score < bestScore) {
-      bestScore = score;
-      best = el;
-    }
-  }
-  if (!best) return;
-  best.focus({ preventScroll: true });
-  best.scrollIntoView({ block: "nearest", inline: "nearest" });
+function moveFocus(direction) {
+  const asking = document.querySelector(".ask");
+  const root = asking || document;
+  const items = [...root.querySelectorAll(".tv-item")].filter(visible);
+  if (!items.length) return;
+  const rects = items.map((el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  });
+  const index = items.indexOf(document.activeElement);
+  const next = pickNext(rects, index, direction);
+  const el = items[next < 0 ? (index < 0 ? 0 : index) : next];
+  if (!el || el === document.activeElement) return;
+  el.focus({ preventScroll: true });
+  el.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
-async function collectSources(type, id, season, episode, apiKey) {
+function isLikelyAnime(item) {
+  if (!item) return false;
+  const genres = item.genres || [];
+  const ids = item.genre_ids || genres.map((entry) => entry.id).filter(Boolean);
+  const names = genres.map((entry) => (entry.name || "").toLowerCase());
+  const animated = ids.includes(16) || names.some((name) => name === "animation" || name === "anime");
+  const animeNamed = names.includes("anime");
+  return (animated && item.original_language === "ja") || animeNamed;
+}
+
+function variantRank(entry) {
+  if (entry.variant !== "sub" && entry.variant !== "dub") return 0;
+  const pref = localStorage.getItem(AUDIO_PREF) || "";
+  if (pref === "ja") return entry.variant === "sub" ? 1 : 2;
+  if (pref) return entry.variant === "dub" ? 1 : 2;
+  return entry.variant === "sub" ? 1 : 2;
+}
+
+async function collectSources(type, id, season, episode, apiKey, item) {
   let imdb = null;
   try {
     imdb = await fetchImdbId(type, id, apiKey);
@@ -91,21 +111,47 @@ async function collectSources(type, id, season, episode, apiKey) {
     const url = getSourceUrl(src.id, type, ident, season, episode);
     if (url) list.push({ id: src.id, label: src.label, url });
   }
+  if (isLikelyAnime(item)) {
+    try {
+      const data = await fetchAnilistData(titleOf(item), "ANIME", id);
+      if (data?.id) {
+        const ep = episode || 1;
+        const sub = getAnimeSourceUrl("vidnest", data.id, ep, "sub");
+        const dub = getAnimeSourceUrl("vidnest", data.id, ep, "dub");
+        if (sub) list.push({ id: "vidnest", label: "Vidnest · Subbed", url: sub, variant: "sub" });
+        if (dub) list.push({ id: "vidnest", label: "Vidnest · Dubbed", url: dub, variant: "dub" });
+      }
+    } catch {
+      /* the regular movie and TV sources still play */
+    }
+  }
   list.sort((a, b) => {
     const ia = PREFER.indexOf(a.id);
     const ib = PREFER.indexOf(b.id);
-    return (ia < 0 ? 50 : ia) - (ib < 0 ? 50 : ib);
+    const base = (ia < 0 ? 50 : ia) - (ib < 0 ? 50 : ib);
+    if (base !== 0) return base;
+    return variantRank(a) - variantRank(b);
   });
   return list;
 }
 
 function titleOf(item) {
-  return item.title || item.name || "Untitled";
+  return item?.title || item?.name || "Untitled";
 }
 
 function yearOf(item) {
-  const raw = item.release_date || item.first_air_date || "";
+  const raw = item?.release_date || item?.first_air_date || "";
   return raw.slice(0, 4);
+}
+
+function kindOf(item) {
+  return item?.media_type || item?.type || (item?.name && !item?.title ? "tv" : "movie");
+}
+
+function art(item, field) {
+  if (!item) return null;
+  if (field === "poster") return item.poster_path || item.poster || null;
+  return item.backdrop_path || item.backdrop || item.poster_path || item.poster || null;
 }
 
 export default function TvApp() {
@@ -113,6 +159,7 @@ export default function TvApp() {
   const [ready, setReady] = useState(false);
   const [view, setView] = useState("home");
   const [detail, setDetail] = useState(null);
+  const [logo, setLogo] = useState(null);
   const [home, setHome] = useState(null);
   const [grid, setGrid] = useState([]);
   const [query, setQuery] = useState("");
@@ -123,10 +170,15 @@ export default function TvApp() {
   const [cast, setCast] = useState([]);
   const [toast, setToast] = useState("");
   const [draftKey, setDraftKey] = useState("");
+  const [spot, setSpot] = useState(null);
+  const [ask, setAsk] = useState(null);
+  const [playerMode, setPlayerMode] = useState(() => localStorage.getItem(PLAYER_PREF) || "builtin");
+  const [audioLang, setAudioLang] = useState(() => localStorage.getItem(AUDIO_PREF) || "");
   const backRef = useRef(() => {});
 
   useEffect(() => {
     document.documentElement.classList.add("emberlane");
+    document.documentElement.style.cursor = "none";
     let live = true;
     secureStorage.get("apikey").then((value) => {
       if (!live) return;
@@ -153,25 +205,27 @@ export default function TvApp() {
   }, []);
 
   useEffect(() => {
-    window.__streambertHandleBack = () => {
-      const handled = backRef.current();
-      return handled ? "handled" : "close";
-    };
+    window.__streambertHandleBack = () => (backRef.current() ? "handled" : "close");
     const onKey = (event) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const typing = document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA";
-      if (event.key.startsWith("Arrow")) {
-        if (typing && (event.key === "ArrowLeft" || event.key === "ArrowRight")) return;
+      const direction = directionFromKey(event.key, event.keyCode);
+      if (direction) {
+        if (typing && (direction === "left" || direction === "right")) return;
         event.preventDefault();
         event.stopPropagation();
-        moveFocus(event.key);
-      } else if (event.key === "Enter") {
+        moveFocus(direction);
+        return;
+      }
+      if (isActivateKey(event.key, event.keyCode)) {
         const el = document.activeElement;
-        if (el?.classList?.contains("tv-item")) {
+        if (el?.classList?.contains("tv-item") && el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") {
           event.preventDefault();
           el.click();
         }
-      } else if ((event.key === "Escape" || event.key === "Backspace") && !typing) {
+        return;
+      }
+      if ((event.key === "Escape" || event.key === "Backspace" || event.keyCode === 4) && !typing) {
         event.preventDefault();
         event.stopPropagation();
         window.__streambertHandleBack?.();
@@ -186,11 +240,17 @@ export default function TvApp() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const el = document.querySelector("[data-autofocus='1']") || document.querySelector(".stage .tv-item");
+      const el = (ask ? document.querySelector(".ask [data-autofocus='1']") : null)
+        || document.querySelector("[data-autofocus='1']")
+        || document.querySelector(".stage .tv-item");
       el?.focus();
-    }, 50);
+    }, 60);
     return () => clearTimeout(timer);
-  }, [view, detail?.id, season, apiKey, ready]);
+  }, [view, detail?.id, season, apiKey, ready, ask]);
+
+  useEffect(() => {
+    setSpot(null);
+  }, [view, detail?.id]);
 
   useEffect(() => {
     if (!apiKey || view !== "home") return;
@@ -199,17 +259,16 @@ export default function TvApp() {
       tmdbFetch("/trending/all/week", apiKey),
       tmdbFetch("/movie/popular", apiKey),
       tmdbFetch("/tv/popular", apiKey),
-    ])
-      .then(([trending, movies, series]) => {
-        if (!live) return;
-        setHome({
-          hero: (trending.results || []).find((item) => item.backdrop_path) || trending.results?.[0],
-          trending: trending.results || [],
-          movies: movies.results || [],
-          series: series.results || [],
-        });
-      })
-      .catch((error) => setToast(error.message || "Could not reach TMDB"));
+    ]).then(([trending, movies, series]) => {
+      if (!live) return;
+      const list = trending.results || [];
+      setHome({
+        hero: list.find((item) => item.backdrop_path) || list[0],
+        trending: list,
+        movies: movies.results || [],
+        series: series.results || [],
+      });
+    }).catch((error) => setToast(error.message || "Could not reach TMDB"));
     return () => {
       live = false;
     };
@@ -217,13 +276,10 @@ export default function TvApp() {
 
   useEffect(() => {
     if (!apiKey || (view !== "movies" && view !== "series")) return;
-    const kind = view === "movies" ? "movie" : "tv";
     let live = true;
-    tmdbFetch(`/${kind}/popular`, apiKey)
-      .then((data) => {
-        if (live) setGrid(data.results || []);
-      })
-      .catch((error) => setToast(error.message || "Could not reach TMDB"));
+    tmdbFetch(`/${view === "movies" ? "movie" : "tv"}/popular`, apiKey).then((data) => {
+      if (live) setGrid(data.results || []);
+    }).catch((error) => setToast(error.message || "Could not reach TMDB"));
     return () => {
       live = false;
     };
@@ -232,32 +288,31 @@ export default function TvApp() {
   useEffect(() => {
     if (!detail || !apiKey) return;
     let live = true;
-    const kind = detail.media_type === "tv" || detail.name ? "tv" : "movie";
-    tmdbFetch(`/${kind}/${detail.id}`, apiKey)
-      .then((data) => {
-        if (!live) return;
-        setDetail((prev) => (prev ? { ...prev, ...data, media_type: kind } : prev));
-      })
-      .catch(() => {});
-    tmdbFetch(`/${kind}/${detail.id}/credits`, apiKey)
-      .then((data) => {
-        if (live) setCast((data.cast || []).slice(0, 16));
-      })
-      .catch(() => setCast([]));
+    const kind = kindOf(detail);
+    tmdbFetch(`/${kind}/${detail.id}`, apiKey).then((data) => {
+      if (live) setDetail((current) => (current ? { ...current, ...data, media_type: kind } : current));
+    }).catch(() => {});
+    tmdbFetch(`/${kind}/${detail.id}/credits`, apiKey).then((data) => {
+      if (live) setCast((data.cast || []).slice(0, 16));
+    }).catch(() => setCast([]));
+    tmdbFetch(`/${kind}/${detail.id}/images`, apiKey).then((data) => {
+      const logos = data.logos || [];
+      const pick = logos.find((item) => item.iso_639_1 === "en") || logos.find((item) => !item.iso_639_1) || logos[0];
+      if (live) setLogo(pick ? imgUrl(pick.file_path, "w500") : null);
+    }).catch(() => {
+      if (live) setLogo(null);
+    });
     return () => {
       live = false;
     };
   }, [detail?.id, apiKey]);
 
   useEffect(() => {
-    if (!detail || !apiKey || (detail.media_type !== "tv" && !detail.name)) return;
-    if (detail.media_type === "movie") return;
+    if (!detail || !apiKey || kindOf(detail) !== "tv") return;
     let live = true;
-    tmdbFetch(`/tv/${detail.id}/season/${season}`, apiKey)
-      .then((data) => {
-        if (live) setEpisodes(data.episodes || []);
-      })
-      .catch(() => setEpisodes([]));
+    tmdbFetch(`/tv/${detail.id}/season/${season}`, apiKey).then((data) => {
+      if (live) setEpisodes(data.episodes || []);
+    }).catch(() => setEpisodes([]));
     return () => {
       live = false;
     };
@@ -270,21 +325,24 @@ export default function TvApp() {
       setResults([]);
       return;
     }
-    const handle = setTimeout(() => {
-      tmdbFetch(`/search/multi?query=${encodeURIComponent(text)}`, apiKey)
-        .then((data) => {
-          setResults((data.results || []).filter((item) => item.media_type === "movie" || item.media_type === "tv"));
-        })
-        .catch(() => setResults([]));
+    const timer = setTimeout(() => {
+      tmdbFetch(`/search/multi?query=${encodeURIComponent(text)}`, apiKey).then((data) => {
+        setResults((data.results || []).filter((item) => item.media_type === "movie" || item.media_type === "tv"));
+      }).catch(() => setResults([]));
     }, 250);
-    return () => clearTimeout(handle);
+    return () => clearTimeout(timer);
   }, [query, apiKey, view]);
 
   backRef.current = () => {
+    if (ask) {
+      setAsk(null);
+      return true;
+    }
     if (detail) {
       setDetail(null);
       setCast([]);
       setEpisodes([]);
+      setLogo(null);
       return true;
     }
     if (view !== "home") {
@@ -295,24 +353,27 @@ export default function TvApp() {
   };
 
   const open = (item) => {
-    const kind = item.media_type || (item.title ? "movie" : "tv");
-    setSeason(1);
+    const kind = kindOf(item);
+    setSeason(item.season || 1);
     setEpisodes([]);
     setCast([]);
-    setDetail({ ...item, media_type: kind });
+    setLogo(null);
+    setDetail({ ...item, media_type: kind, poster_path: art(item, "poster"), backdrop_path: art(item, "backdrop") });
   };
+
+  const savedFor = (item) => shelf.find((entry) => entry.id === item?.id && (entry.type === kindOf(item) || entry.media_type === kindOf(item)));
 
   const play = async (item, extra = {}) => {
     if (!window.electron?.playNative) {
       setToast("Native playback is not available.");
       return;
     }
-    const kind = item.media_type || (item.name && !item.title ? "tv" : "movie");
+    const kind = kindOf(item);
     const seasonNo = extra.season || (kind === "tv" ? season : undefined);
     const episodeNo = extra.episode || (kind === "tv" ? 1 : undefined);
     setToast(`Finding a stream for ${titleOf(item)}…`);
     try {
-      const sources = await collectSources(kind, item.id, seasonNo, episodeNo, apiKey);
+      const sources = await collectSources(kind, item.id, seasonNo, episodeNo, apiKey, item);
       if (sources.length === 0) {
         setToast("No playable source for this title.");
         return;
@@ -323,18 +384,27 @@ export default function TvApp() {
         subtitle,
         sources,
         startMs: extra.startMs || 0,
+        handoff: extra.handoff || "",
+        audioLang: localStorage.getItem(AUDIO_PREF) || "",
       });
+      if (typeof result?.audioLang === "string" && result.audioLang) {
+        localStorage.setItem(AUDIO_PREF, result.audioLang);
+        setAudioLang(result.audioLang);
+      }
       if (result?.positionMs > 10000) {
         remember({
           id: item.id,
           type: kind,
           title: titleOf(item),
-          poster: item.poster_path,
-          backdrop: item.backdrop_path,
+          poster: art(item, "poster"),
+          backdrop: art(item, "backdrop"),
           season: seasonNo || null,
           episode: episodeNo || null,
           positionMs: result.positionMs,
           media_type: kind,
+          original_language: item.original_language || null,
+          genre_ids: item.genre_ids || (item.genres || []).map((entry) => entry.id),
+          genres: item.genres || null,
         });
         setShelf(loadShelf());
       }
@@ -345,6 +415,26 @@ export default function TvApp() {
     }
   };
 
+  const begin = (item, extra = {}) => {
+    const mode = extra.force || localStorage.getItem(PLAYER_PREF) || "builtin";
+    if (mode === "ask" && !extra.force) {
+      setAsk({ item, extra });
+      return;
+    }
+    play(item, { ...extra, handoff: mode === "external" ? "external" : "" });
+  };
+
+  const choosePlayer = (mode) => {
+    localStorage.setItem(PLAYER_PREF, mode);
+    setPlayerMode(mode);
+  };
+
+  const chooseAudio = (code) => {
+    if (code) localStorage.setItem(AUDIO_PREF, code);
+    else localStorage.removeItem(AUDIO_PREF);
+    setAudioLang(code);
+  };
+
   const saveKey = async () => {
     const next = draftKey.trim();
     await secureStorage.set("apikey", next);
@@ -353,163 +443,200 @@ export default function TvApp() {
     if (next) setView("home");
   };
 
-  const typeKeys = (chunk) => {
-    setQuery((value) => {
-      if (chunk === "del") return value.slice(0, -1);
-      if (chunk === "clear") return "";
-      if (chunk === "space") return value + " ";
-      return value + chunk;
-    });
-  };
+  const featured = spot || (view === "home" ? home?.hero : grid[0]);
 
   return (
-    <div className="ember">
-      <nav className="rail">
-        <div className="wordmark">REELIX</div>
-        {RAIL.map(([id, label]) => (
+    <div className="reelix">
+      <nav className="rail" aria-label="Sections">
+        <div className="brand">
+          <img src="/reelix-mark.png" alt="" />
+          <b>REELIX</b>
+        </div>
+        {RAIL.map(([id, label, Icon]) => (
           <button
             key={id}
             type="button"
+            tabIndex={0}
             className={`rail-btn tv-item${view === id && !detail ? " active" : ""}`}
             onClick={() => {
               setDetail(null);
               setView(id);
             }}
           >
-            {label}
+            <Icon />
+            <span>{label}</span>
           </button>
         ))}
       </nav>
       <main className="stage">
         {!ready ? null : !apiKey && view !== "settings" ? (
           <section className="welcome">
-            <div className="kicker">A living room, not a desktop</div>
+            <div className="kicker">Reelix</div>
             <h1>REELIX</h1>
-            <p className="overview">
-              Add a TMDB read token and the shelves fill in. Playback runs in the TV player, with the next source ready when one embed refuses.
-            </p>
+            <p className="overview">Add a TMDB read token and the shelves fill in. Playback runs in the TV player.</p>
             <div className="actions">
-              <button className="btn primary tv-item" data-autofocus="1" type="button" onClick={() => setView("settings")}>
-                Add token
-              </button>
+              <button className="btn primary tv-item" tabIndex={0} data-autofocus="1" type="button" onClick={() => setView("settings")}>Add token</button>
             </div>
           </section>
         ) : detail ? (
           <Details
             item={detail}
+            logo={logo}
             season={season}
             episodes={episodes}
             cast={cast}
+            resume={savedFor(detail)}
             onSeason={(value) => setSeason(value)}
-            onPlay={(extra) => play(detail, extra)}
+            onPlay={(extra) => begin(detail, extra)}
           />
         ) : view === "home" ? (
-          <Home data={home} shelf={shelf} onOpen={open} onPlay={play} />
+          <Home data={home} shelf={shelf} featured={featured} onSpot={setSpot} onOpen={open} onPlay={begin} />
         ) : view === "movies" || view === "series" ? (
-          <section className="grid">
-            {grid.map((item, index) => (
-              <Poster key={item.id} item={item} auto={index === 0} onOpen={open} />
-            ))}
-          </section>
+          <Browse items={grid} featured={featured} onSpot={setSpot} onOpen={open} onPlay={begin} />
         ) : view === "search" ? (
-          <Search query={query} results={results} onKey={typeKeys} onOpen={open} />
+          <Search query={query} results={results} onKey={(chunk) => setQuery((value) => (chunk === "del" ? value.slice(0, -1) : chunk === "clear" ? "" : chunk === "space" ? `${value} ` : value + chunk))} onOpen={open} onSpot={setSpot} />
         ) : view === "library" ? (
-          <section>
-            <h2 className="row-head">Continue</h2>
-            <div className="scroller">
-              {shelf.length === 0 ? <p className="note">Titles you start will wait here.</p> : null}
-              {shelf.map((item, index) => (
-                <Poster
-                  key={`${item.type}-${item.id}-${item.episode || 0}`}
-                  item={item}
-                  auto={index === 0}
-                  onOpen={() => play({ ...item, media_type: item.type }, { season: item.season, episode: item.episode, startMs: item.positionMs })}
-                />
-              ))}
-            </div>
-          </section>
+          <Library shelf={shelf} featured={spot || shelf[0]} onSpot={setSpot} onPlay={begin} />
         ) : (
-          <Settings draft={draftKey} setDraft={setDraftKey} onSave={saveKey} />
+          <Settings
+            draft={draftKey}
+            setDraft={setDraftKey}
+            onSave={saveKey}
+            playerMode={playerMode}
+            onPlayer={choosePlayer}
+            audioLang={audioLang}
+            onAudio={chooseAudio}
+          />
         )}
+        {ask ? (
+          <div className="ask">
+            <div className="ask-card">
+              <h2>Play with</h2>
+              <button className="btn primary tv-item" tabIndex={0} data-autofocus="1" type="button" onClick={() => { const pending = ask; setAsk(null); play(pending.item, { ...pending.extra, handoff: "" }); }}>Built-in player</button>
+              <button className="btn tv-item" tabIndex={0} type="button" onClick={() => { const pending = ask; setAsk(null); play(pending.item, { ...pending.extra, handoff: "external" }); }}>External player</button>
+              <button className="btn tv-item" tabIndex={0} type="button" onClick={() => setAsk(null)}>Cancel</button>
+            </div>
+          </div>
+        ) : null}
         {toast ? <div className="toast">{toast}</div> : null}
       </main>
     </div>
   );
 }
 
-function Home({ data, shelf, onOpen, onPlay }) {
-  const hero = data?.hero;
-  if (!hero) {
+function Hero({ item, onPlay, onOpen, auto }) {
+  if (!item) {
     return <section className="welcome"><h1>REELIX</h1><p className="overview">Loading the shelves…</p></section>;
   }
+  const backdrop = imgUrl(art(item, "backdrop"), "w1280");
+  const kind = kindOf(item);
   return (
-    <section className="home">
-      <div className="hero" style={{ backgroundImage: `url(${imgUrl(hero.backdrop_path, "w1280")})` }}>
-        <div className="hero-shade" />
-        <div className="hero-copy">
-          <div className="kicker">{hero.media_type === "tv" ? "Series" : "Movie"} · {yearOf(hero)}</div>
-          <h1>{titleOf(hero)}</h1>
-          <p className="overview">{hero.overview}</p>
-          <div className="actions">
-            <button className="btn primary tv-item" data-autofocus="1" type="button" onClick={() => onPlay(hero)}>Play</button>
-            <button className="btn tv-item" type="button" onClick={() => onOpen(hero)}>Details</button>
-          </div>
+    <div className="hero" style={{ backgroundImage: backdrop ? `url(${backdrop})` : undefined }}>
+      <div className="hero-shade" />
+      <div className="hero-copy">
+        <div className="kicker">{kind === "tv" ? "Series" : "Movie"}{yearOf(item) ? ` · ${yearOf(item)}` : ""}</div>
+        <h1>{titleOf(item)}</h1>
+        {item.overview ? <p className="overview">{item.overview}</p> : null}
+        <div className="actions">
+          <button className="btn primary tv-item" tabIndex={0} data-autofocus={auto ? "1" : undefined} type="button" onClick={() => onPlay(item)}>Play</button>
+          <button className="btn tv-item" tabIndex={0} type="button" onClick={() => onOpen(item)}>Details</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Home({ data, shelf, featured, onSpot, onOpen, onPlay }) {
+  if (!data?.hero && !featured) return <Hero item={null} />;
+  return (
+    <section className="home">
+      <Hero item={featured || data.hero} auto onPlay={(item) => onPlay(item, { season: item.season, episode: item.episode, startMs: item.positionMs })} onOpen={onOpen} />
       <div className="rows">
         <div className="rows-scroll">
-          {shelf.length > 0 ? <Row label="Continue" items={shelf} onOpen={(item) => onPlay(item, { season: item.season, episode: item.episode, startMs: item.positionMs })} /> : null}
-          <Row label="Trending" items={data.trending} onOpen={onOpen} />
-          <Row label="Movies" items={data.movies} onOpen={onOpen} />
-          <Row label="Series" items={data.series} onOpen={onOpen} />
+          {shelf.length > 0 ? <Row label="Continue" items={shelf} onOpen={(item) => onPlay(item, { season: item.season, episode: item.episode, startMs: item.positionMs })} onSpot={onSpot} /> : null}
+          <Row label="Trending" items={data?.trending} onOpen={onOpen} onSpot={onSpot} />
+          <Row label="Movies" items={data?.movies} onOpen={onOpen} onSpot={onSpot} />
+          <Row label="Series" items={data?.series} onOpen={onOpen} onSpot={onSpot} />
         </div>
       </div>
     </section>
   );
 }
 
-function Row({ label, items, onOpen }) {
+function Browse({ items, featured, onSpot, onOpen, onPlay }) {
+  return (
+    <section className="browse">
+      <Hero item={featured || items[0]} auto onPlay={onPlay} onOpen={onOpen} />
+      <div className="grid">
+        {items.map((item) => (
+          <Poster key={item.id} item={item} onOpen={onOpen} onSpot={onSpot} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Library({ shelf, featured, onSpot, onPlay }) {
+  return (
+    <section className="library">
+      <Hero item={featured} auto onPlay={(item) => onPlay(item, { season: item.season, episode: item.episode, startMs: item.positionMs })} onOpen={(item) => onPlay(item, { season: item.season, episode: item.episode, startMs: item.positionMs })} />
+      <div className="library-scroll">
+        <Row label="Continue watching" items={shelf} onOpen={(item) => onPlay(item, { season: item.season, episode: item.episode, startMs: item.positionMs })} onSpot={onSpot} />
+        {shelf.length === 0 ? <p className="note">Titles you start will wait here.</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function Row({ label, items, onOpen, onSpot }) {
   return (
     <div className="row">
       <div className="row-head">{label}</div>
       <div className="scroller">
         {(items || []).slice(0, 18).map((item) => (
-          <Poster key={`${label}-${item.id}`} item={item} onOpen={onOpen} />
+          <Poster key={`${label}-${item.id}-${item.episode || 0}`} item={item} onOpen={onOpen} onSpot={onSpot} />
         ))}
       </div>
     </div>
   );
 }
 
-function Poster({ item, onOpen, auto }) {
-  const src = imgUrl(item.poster_path, "w342");
+function Poster({ item, onOpen, onSpot }) {
+  const src = imgUrl(art(item, "poster"), "w342");
   return (
-    <button className="poster tv-item" type="button" data-autofocus={auto ? "1" : undefined} onClick={() => onOpen(item)}>
+    <button className="poster tv-item" type="button" tabIndex={0} onClick={() => onOpen(item)} onFocus={() => onSpot?.(item)}>
       {src ? <img src={src} alt="" /> : <div className="ph" />}
       <small>{titleOf(item)}</small>
     </button>
   );
 }
 
-function Details({ item, season, episodes, cast, onSeason, onPlay }) {
-  const isTv = item.media_type === "tv" || (!!item.name && !item.title);
+function Details({ item, logo, season, episodes, cast, resume, onSeason, onPlay }) {
+  const isTv = kindOf(item) === "tv";
   const seasons = (item.seasons || []).filter((entry) => entry.season_number > 0);
+  const genres = (item.genres || []).slice(0, 3).map((entry) => entry.name).join(" · ");
+  const runtime = item.runtime ? `${item.runtime} min` : item.episode_run_time?.[0] ? `${item.episode_run_time[0]} min` : "";
+  const backdrop = imgUrl(art(item, "backdrop"), "w1280");
   return (
     <section className="details">
-      <div className="details-hero" style={{ backgroundImage: `url(${imgUrl(item.backdrop_path, "w1280")})` }}>
+      <div className="details-hero" style={{ backgroundImage: backdrop ? `url(${backdrop})` : undefined }}>
         <div className="hero-shade" />
         <div className="details-copy">
           <div className="meta">
             {isTv ? "Series" : "Movie"}
             {yearOf(item) ? ` · ${yearOf(item)}` : ""}
+            {runtime ? ` · ${runtime}` : ""}
             {item.vote_average ? ` · ${Number(item.vote_average).toFixed(1)}` : ""}
+            {genres ? ` · ${genres}` : ""}
           </div>
-          <h1>{titleOf(item)}</h1>
+          {logo ? <img className="logo-lockup" src={logo} alt={titleOf(item)} /> : <h1>{titleOf(item)}</h1>}
           <p className="overview">{item.overview}</p>
           <div className="actions">
-            <button className="btn primary tv-item" data-autofocus="1" type="button" onClick={() => onPlay(isTv ? { season, episode: 1 } : {})}>
-              Play
-            </button>
+            <button className="btn primary tv-item" tabIndex={0} data-autofocus="1" type="button" onClick={() => onPlay(isTv ? { season, episode: 1 } : {})}>Play</button>
+            {resume?.positionMs > 10000 ? (
+              <button className="btn tv-item" tabIndex={0} type="button" onClick={() => onPlay({ season: resume.season || season, episode: resume.episode || 1, startMs: resume.positionMs })}>Resume</button>
+            ) : null}
+            <button className="btn tv-item" tabIndex={0} type="button" onClick={() => onPlay({ force: "external", ...(isTv ? { season, episode: 1 } : {}) })}>Play in external player</button>
           </div>
         </div>
       </div>
@@ -518,12 +645,7 @@ function Details({ item, season, episodes, cast, onSeason, onPlay }) {
           <div className="row-head">Seasons</div>
           <div className="chips">
             {seasons.map((entry) => (
-              <button
-                key={entry.season_number}
-                type="button"
-                className={`chip tv-item${entry.season_number === season ? " on" : ""}`}
-                onClick={() => onSeason(entry.season_number)}
-              >
+              <button key={entry.season_number} type="button" tabIndex={0} className={`chip tv-item${entry.season_number === season ? " on" : ""}`} onClick={() => onSeason(entry.season_number)}>
                 {entry.name || `Season ${entry.season_number}`}
               </button>
             ))}
@@ -531,14 +653,12 @@ function Details({ item, season, episodes, cast, onSeason, onPlay }) {
           <div className="row-head">Episodes</div>
           <div className="eps">
             {episodes.map((episode) => (
-              <button
-                key={episode.id}
-                type="button"
-                className="ep tv-item"
-                onClick={() => onPlay({ season, episode: episode.episode_number })}
-              >
-                <b>{episode.episode_number}. {episode.name}</b>
-                <span>{episode.overview || "Play this episode"}</span>
+              <button key={episode.id} type="button" tabIndex={0} className="ep tv-item" onClick={() => onPlay({ season, episode: episode.episode_number })}>
+                <b>{episode.episode_number}</b>
+                <span className="ep-copy">
+                  <b>{episode.name || `Episode ${episode.episode_number}`}</b>
+                  <span>{episode.overview || "Play this episode"}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -562,8 +682,8 @@ function Details({ item, season, episodes, cast, onSeason, onPlay }) {
   );
 }
 
-function Search({ query, results, onKey, onOpen }) {
-  const rows = ["abcdef", "ghijkl", "mnopqr", "stuvwx", "yz"];
+function Search({ query, results, onKey, onOpen, onSpot }) {
+  const rows = ["abcdef", "ghijkl", "mnopqr", "stuvwx", "yz0123", "456789"];
   return (
     <section className="search">
       <div className="keys">
@@ -572,22 +692,20 @@ function Search({ query, results, onKey, onOpen }) {
         {rows.map((row) => (
           <div className="keyrow" key={row}>
             {[...row].map((letter, index) => (
-              <button key={letter} className="key tv-item" data-autofocus={row === "abcdef" && index === 0 ? "1" : undefined} type="button" onClick={() => onKey(letter)}>
-                {letter}
-              </button>
+              <button key={letter} className="key tv-item" tabIndex={0} data-autofocus={row === "abcdef" && index === 0 ? "1" : undefined} type="button" onClick={() => onKey(letter)}>{letter}</button>
             ))}
           </div>
         ))}
         <div className="keyrow">
-          <button className="key wide tv-item" type="button" onClick={() => onKey("space")}>space</button>
-          <button className="key wide tv-item" type="button" onClick={() => onKey("del")}>delete</button>
-          <button className="key wide tv-item" type="button" onClick={() => onKey("clear")}>clear</button>
+          <button className="key wide tv-item" tabIndex={0} type="button" onClick={() => onKey("space")}>space</button>
+          <button className="key wide tv-item" tabIndex={0} type="button" onClick={() => onKey("del")}>delete</button>
+          <button className="key wide tv-item" tabIndex={0} type="button" onClick={() => onKey("clear")}>clear</button>
         </div>
       </div>
       <div className="results">
         <div className="grid">
           {results.map((item) => (
-            <Poster key={item.id} item={item} onOpen={onOpen} />
+            <Poster key={item.id} item={item} onOpen={onOpen} onSpot={onSpot} />
           ))}
         </div>
       </div>
@@ -595,20 +713,64 @@ function Search({ query, results, onKey, onOpen }) {
   );
 }
 
-function Settings({ draft, setDraft, onSave }) {
+function Settings({ draft, setDraft, onSave, playerMode, onPlayer, audioLang, onAudio }) {
   return (
     <section className="settings">
       <div className="block">
         <h2>TMDB token</h2>
         <p className="note">A read access token fills the shelves. Pair a phone so you do not have to type it with the remote.</p>
-        <input className="field tv-item" data-autofocus="1" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="eyJ…" />
+        <input className="field tv-item" tabIndex={0} data-autofocus="1" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Paste token" />
         <div className="actions">
-          <button className="btn primary tv-item" type="button" onClick={onSave}>Save token</button>
+          <button className="btn primary tv-item" tabIndex={0} type="button" onClick={onSave}>Save token</button>
         </div>
       </div>
       <div className="block">
-        <PhoneKeyPairing />
+        <h2>Player</h2>
+        <p className="note">Choose where Play opens a title. Play in external player always hands the stream to another app.</p>
+        <div className="chips">
+          {[["builtin", "Built-in"], ["external", "External"], ["ask", "Ask every time"]].map(([id, label]) => (
+            <button key={id} type="button" tabIndex={0} className={`chip tv-item${playerMode === id ? " on" : ""}`} onClick={() => onPlayer(id)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="block">
+        <h2>Audio language</h2>
+        <p className="note">Used when a stream has more than one voice track. Anime titles also offer subbed and dubbed versions.</p>
+        <div className="chips">
+          {AUDIO_LANGS.map(([code, label]) => (
+            <button key={code || "default"} type="button" tabIndex={0} className={`chip tv-item${audioLang === code ? " on" : ""}`} onClick={() => onAudio(code)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="block">
+        <PhoneKeyPairing focusable />
       </div>
     </section>
   );
+}
+
+function Icon({ children }) {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+function HomeIcon() {
+  return <Icon><path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-8.5Z" /></Icon>;
+}
+function MovieIcon() {
+  return <Icon><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M8 5v14M16 5v14M3 9h5M3 15h5M16 9h5M16 15h5" /></Icon>;
+}
+function SeriesIcon() {
+  return <Icon><rect x="4" y="4" width="12" height="16" rx="2" /><path d="M16 8h4v12a1 1 0 0 1-1 1h-3" /></Icon>;
+}
+function SearchIcon() {
+  return <Icon><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></Icon>;
+}
+function LibraryIcon() {
+  return <Icon><path d="M6 4h3v16H6zM11 7h3v13h-3zM16 5h3v15h-3z" /></Icon>;
+}
+function SettingsIcon() {
+  return <Icon><circle cx="12" cy="12" r="3" /><path d="M12 3.5v2.2M12 18.3v2.2M4.8 6.2l1.6 1.6M17.6 16.2l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.8 17.8l1.6-1.6M17.6 7.8l1.6-1.6" /></Icon>;
 }

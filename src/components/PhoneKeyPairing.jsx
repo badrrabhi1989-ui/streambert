@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
  * Shown on Android. The TV displays a one-time code and QR; the phone opens
  * a page served by the app on the local network and pastes the keys.
  */
-export default function PhoneKeyPairing() {
+export default function PhoneKeyPairing({ focusable = false }) {
   const android = typeof window !== "undefined" && !!window.__STREAMBERT_ANDROID__;
   const [session, setSession] = useState(null);
   const [qr, setQr] = useState("");
@@ -85,7 +85,7 @@ export default function PhoneKeyPairing() {
         keys if you use them), then the page closes itself.
       </p>
       {!session && (
-        <button className="btn btn-primary" type="button" onClick={start} disabled={busy}>
+        <button className={`btn btn-primary${focusable ? " tv-item" : ""}`} type="button" tabIndex={0} onClick={start} disabled={busy}>
           {busy ? "Starting…" : "Show pairing code"}
         </button>
       )}
@@ -97,7 +97,7 @@ export default function PhoneKeyPairing() {
           <p className="phone-pair-copy">
             The code works once and the page stops after a few minutes, or when you cancel.
           </p>
-          <button className="btn btn-ghost" type="button" onClick={cancel}>
+          <button className={`btn btn-ghost${focusable ? " tv-item" : ""}`} type="button" tabIndex={0} onClick={cancel}>
             Cancel
           </button>
         </div>

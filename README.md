@@ -139,7 +139,7 @@ The Android app is the same Vite + React interface, loaded in a Capacitor WebVie
 
 - Node.js >= 22.12.0
 - JDK 21
-- Android SDK 35: platform `android-35`, build-tools `35.0.0`, and the command-line tools
+- Android SDK: platforms `android-35` and `android-36` (Media3 compiles against 36; the app still targets 35), build-tools `35.0.0`, and the command-line tools
 - `ANDROID_HOME` pointing at that SDK (for example `$HOME/android-sdk`)
 
 Accept the SDK licenses once, then install the packages:
@@ -147,7 +147,7 @@ Accept the SDK licenses once, then install the packages:
 ```bash
 yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses
 "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
-  "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+  "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
 ```
 
 ### Build a debug APK
@@ -188,7 +188,7 @@ The screens, settings, library, search, player layout, subtitle picker, backups,
 
 ### Android TV
 
-The same APK runs on phones and Android TV. On a television the launcher name is **Reelix**: a 1920×1080 living-room layout with a left rail, full-bleed hero, poster rows, and a details page whose Play button takes focus first. Cast, seasons, and episodes are rows on that page, inside the TV safe area.
+The same APK runs on phones and Android TV. On a television the launcher name is **Reelix**: a 1920×1080 layout with a slim icon rail, a hero that follows the focused title, poster rows, and a details page with Play, Resume, and Play in external player. Seasons and episodes stay inside the TV safe area, and the pointer is hidden. The player overlay (OK or Down) chooses subtitles, audio, source, and quality, and can hand the stream to VLC, MX Player, or Just Player. Audio tracks are labeled by language, channels, and codec. Settings remembers a preferred audio language and the default player (built-in, external, or ask every time). Anime titles can offer separate subbed and dubbed versions.
 
 Playback does not use an embed iframe. Those pages often refuse to be framed, which left the old player on "Loading…". Reelix opens each provider as its own page, takes the HLS, DASH, or MP4 URL, and plays it in a Media3 player. The remote pauses, seeks, and toggles subtitles. If a source never produces a stream, the next one is tried. Vidrift is still first, then VidSrc, Vidfast, Vidlove, Aether, Vidnest, and Frembed.
 

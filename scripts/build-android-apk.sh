@@ -25,6 +25,7 @@ if [[ ! -d node_modules/@capacitor/cli ]]; then
   npm install
 fi
 
+node scripts/verify-tv-focus.mjs
 npx vite build
 
 if [[ ! -f android/app/build.gradle ]]; then

@@ -31,7 +31,7 @@ class StreamResolver(private val context: Context) {
         val url: String,
         val headers: Map<String, String>,
         val referer: String,
-        val subtitle: String?,
+        val subtitles: List<String>,
     )
 
     private val main = Handler(Looper.getMainLooper())
@@ -40,7 +40,7 @@ class StreamResolver(private val context: Context) {
     private var bestUrl: String? = null
     private var bestHeaders: Map<String, String> = emptyMap()
     private var bestRank = 0
-    private var subtitle: String? = null
+    private val subtitles = ArrayList<String>()
     private var pageUrl: String = ""
     private var onResult: ((Hit?) -> Unit)? = null
     private var commit: Runnable? = null
@@ -58,7 +58,7 @@ class StreamResolver(private val context: Context) {
         bestUrl = null
         bestHeaders = emptyMap()
         bestRank = 0
-        subtitle = null
+        subtitles.clear()
         pageUrl = url
         seenCount = 0
         onResult = callback
@@ -97,7 +97,7 @@ class StreamResolver(private val context: Context) {
 
     private fun bestHit(): Hit? {
         val url = bestUrl ?: return null
-        return Hit(url, bestHeaders, pageUrl, subtitle)
+        return Hit(url, bestHeaders, pageUrl, subtitles.toList())
     }
 
     private fun finish(hit: Hit?) {
@@ -125,7 +125,7 @@ class StreamResolver(private val context: Context) {
     private fun consider(url: String, headers: Map<String, String>) {
         if (settled) return
         val gen = generation
-        if (MediaUrls.isSubtitle(url) && subtitle == null) subtitle = url
+        if (MediaUrls.isSubtitle(url) && subtitles.none { it == url } && subtitles.size < 8) subtitles.add(url)
         val rank = MediaUrls.rank(url)
         val lower = url.lowercase()
         if (rank > 0 || lower.contains("m3u8") || lower.contains(".mp4") || lower.contains(".mpd") || lower.contains("mpegurl")) {

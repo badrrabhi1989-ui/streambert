@@ -9,6 +9,7 @@
     try {
       document.documentElement.classList.add("sb-tv");
       document.documentElement.classList.add("emberlane");
+      document.documentElement.style.cursor = "none";
       var vp = document.querySelector('meta[name="viewport"]');
       if (vp) vp.setAttribute("content", "width=1920, initial-scale=1, user-scalable=no");
     } catch (e) {}
