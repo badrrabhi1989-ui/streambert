@@ -19,7 +19,11 @@
     "dist:arch": "cross-env ELECTRON_DIST=1 vite build && electron-builder --linux pacman --publish never",
     "dist:appimage": "cross-env ELECTRON_DIST=1 vite build && electron-builder --linux AppImage --publish never",
     "dist:win": "cross-env ELECTRON_DIST=1 vite build && electron-builder --win --publish never",
-    "dist:mac": "cross-env ELECTRON_DIST=1 vite build && electron-builder --mac --universal --publish never"
+    "dist:mac": "cross-env ELECTRON_DIST=1 vite build && electron-builder --mac --universal --publish never",
+    "android:prepare": "node scripts/prepare-android.mjs",
+    "android:sync": "vite build && npx cap sync android && node scripts/prepare-android.mjs",
+    "android:apk": "bash scripts/build-android-apk.sh",
+    "android:test": "node scripts/verify-android-bridge.mjs"
   },
   "dependencies": {
     "approve": "^0.0.12",
@@ -34,7 +38,10 @@
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0",
     "terser": "^5.46.0",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
   },
   "build": {
     "appId": "com.truelockmc.streambert",

@@ -1,0 +1,15 @@
+{
+  "appId": "com.truelockmc.streambert",
+  "appName": "Streambert",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#0a0a0a"
+  },
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost"
+  }
+}

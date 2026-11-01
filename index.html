@@ -8,6 +8,8 @@
     </head>
     <body>
         <div id="root"></div>
+        <!-- No-op in Electron. On Android, installs window.electron before the app boots. -->
+        <script src="./android/boot.js"></script>
         <script type="module" src="/src/main.jsx"></script>
     </body>
 </html>

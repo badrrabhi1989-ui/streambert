@@ -131,6 +131,61 @@ npm run dist
 > - **libcrypt.so.1 error:** `sudo pacman -S libxcrypt-compat`
 > - **http-parser dependency error:** `yay -S http-parser` (from AUR)
 
+## Android
+
+The Android app is the same Vite + React interface, loaded in a Capacitor WebView. Desktop-only Electron and Node APIs are implemented by `public/android/` (the `window.electron` bridge) and `android-kit/` (Kotlin: WebView client, HLS player, downloads, storage). The desktop Electron build is unchanged: the bridge does nothing unless the Android shell injected `window.__SB_BOOT` before the page loads.
+
+### Requirements
+
+- Node.js >= 22.12.0
+- JDK 21
+- Android SDK 35: platform `android-35`, build-tools `35.0.0`, and the command-line tools
+- `ANDROID_HOME` pointing at that SDK (for example `$HOME/android-sdk`)
+
+Accept the SDK licenses once, then install the packages:
+
+```bash
+yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses
+"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
+  "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+```
+
+### Build a debug APK
+
+```bash
+npm install
+npm run android:apk
+```
+
+`npm run android:apk` builds the web app, adds the Capacitor Android project on the first run, copies the native sources and the ad-block list, and runs `./gradlew assembleDebug`. The APK is written to:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Other scripts:
+
+```bash
+npm run android:test    # bridge surface vs Electron preload, plus parser checks
+npm run android:sync    # rebuild the web assets and copy them into the Android project
+```
+
+Install the debug APK with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`. Enable "Install unknown apps" for Streambert if you use the in-app updater later.
+
+### What stays the same, and what Android has to do differently
+
+The screens, settings, library, search, player layout, subtitle picker, backups, and ad-block stats use the same React code and the same `window.electron` method names as the desktop app. A few host capabilities cannot be the desktop implementation:
+
+- **Downloads.** `vid-dl` and `ffmpeg` are desktop binaries. Android uses a built-in downloader (four parallel HLS segments, AES-128, or a direct file). The settings screen still reports a downloader as present. The default folder is the app's Movies directory; you can pick another folder with the system folder picker.
+- **Discord Rich Presence.** There is no Discord desktop IPC socket. The settings toggle stays, and the calls return `{ supported: false }`.
+- **Pop-out player.** Picture-in-picture activity with a close button, instead of an always-on-top frameless window. Closing it reloads the player in the main view, same as desktop.
+- **User agent.** One desktop Chrome user agent for the whole WebView. Electron used a second "clean" agent only to strip its own token; Android has no Electron token.
+- **Window chrome.** `getPlatform()` is `android`, so the Windows/Linux custom titlebar is hidden. The page is laid out at a 1280px-wide desktop viewport and scaled to the screen.
+- **Updates.** The in-app updater looks for an `.apk` asset on the existing GitHub and Codeberg release hosts. Current upstream releases ship desktop installers, so the install button stays disabled until a release includes an APK.
+- **External player.** VLC (`org.videolan.vlc`) when it is installed, otherwise any app that handles the stream. "Show in folder" opens the file.
+- **Cookies.** The app and the embedded player share one WebView cookie jar. Desktop Electron kept `persist:player` and `persist:trailer` separate.
+- **HiAnime playback.** The local HLS page is served inside the WebView at `https://player.streambert.local` (the same hls.js player and `/proxy` URLs as the desktop local server).
+
 ## License
 This project is open-source software licensed under the GNU General Public License v3.0 [(GPL-3.0)](LICENSE).
 
