@@ -213,6 +213,12 @@ object StreambertEngine {
         cookies.setCookie("https://www.youtube.com", "SOCS=CAI; Path=/; Domain=.youtube.com; Secure")
         cookies.setCookie("https://www.youtube-nocookie.com", "SOCS=CAI; Path=/; Domain=.youtube-nocookie.com; Secure")
         view.setBackgroundColor(0xFF040F2D.toInt())
+        if (isTelevision()) {
+            s.setSupportZoom(false)
+            s.builtInZoomControls = false
+            s.displayZoomControls = false
+            view.setInitialScale(televisionScalePercent())
+        }
     }
 
     private fun attachPrivileged(view: WebView) {
@@ -253,8 +259,32 @@ object StreambertEngine {
         o.put("tmp", tmpDir.absolutePath)
         o.put("downloadsJson", readSmall(File(userData, "downloads.json")))
         o.put("television", isTelevision())
-        return "window.__SB_BOOT=" + o.toString().replace("<", "\\u003c") + ";"
+        if (isTelevision()) o.put("tvScale", televisionScale())
+        val json = o.toString().replace("<", "\\u003c")
+        val fit = if (!isTelevision()) "" else """
+            (function(){
+              var s=window.__SB_BOOT&&window.__SB_BOOT.tvScale;
+              if(!s||!document.createElement) return;
+              var c="width=1920, initial-scale="+s+", minimum-scale="+s+", maximum-scale="+s+", user-scalable=no";
+              var m=document.querySelector?document.querySelector('meta[name="viewport"]'):null;
+              if(!m){
+                m=document.createElement("meta");
+                m.setAttribute("name","viewport");
+                (document.head||document.documentElement).appendChild(m);
+              }
+              if(m) m.setAttribute("content", c);
+            })();
+        """.trimIndent()
+        return "window.__SB_BOOT=$json;$fit"
     }
+
+    private fun televisionScale(): Double {
+        val metrics = app.resources.displayMetrics
+        val dip = metrics.widthPixels / metrics.density.coerceAtLeast(0.5f)
+        return (dip / 1920.0).coerceIn(0.25, 2.0)
+    }
+
+    private fun televisionScalePercent(): Int = (televisionScale() * 100.0).toInt().coerceIn(25, 200)
 
     private fun isTelevision(): Boolean {
         val ui = app.getSystemService(Context.UI_MODE_SERVICE) as? android.app.UiModeManager
@@ -619,6 +649,7 @@ object StreambertEngine {
             intent.putExtra("startMs", args.optLong("startMs", 0L))
             intent.putExtra("handoff", args.optString("handoff"))
             intent.putExtra("audioLang", args.optString("audioLang"))
+            intent.putExtra("hasNext", args.optBoolean("hasNext", false))
             val direct = args.optString("directUrl")
             if (direct.isNotBlank()) intent.putExtra("directUrl", direct)
             try {
@@ -868,8 +899,8 @@ object StreambertEngine {
             subs,
             args.optLong("positionMs", 0L),
         )
-        return if (opened) JSONObject().put("ok", true).put("player", "android")
-        else JSONObject().put("ok", false).put("error", "No external player found. Install VLC, MX Player, or Just Player.")
+        return if (opened.ok) JSONObject().put("ok", true).put("player", opened.detail.ifBlank { "android" })
+        else JSONObject().put("ok", false).put("error", opened.detail)
     }
 
     private fun showInFolder(args: JSONObject): JSONObject {

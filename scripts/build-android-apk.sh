@@ -42,14 +42,29 @@ cd android
 chmod +x ./gradlew
 ./gradlew assembleDebug testDebugUnitTest --stacktrace
 
-APK="app/build/outputs/apk/debug/app-debug.apk"
-if [[ ! -f "$APK" ]]; then
-  echo "Gradle finished without $APK" >&2
+OUT="app/build/outputs/apk/debug"
+UNIVERSAL="$OUT/app-universal-debug.apk"
+ARM32="$OUT/app-armeabi-v7a-debug.apk"
+ARM64="$OUT/app-arm64-v8a-debug.apk"
+if [[ ! -f "$UNIVERSAL" || ! -f "$ARM32" || ! -f "$ARM64" ]]; then
+  echo "Gradle finished without the universal and ARM APKs" >&2
+  ls -lh "$OUT" || true
   exit 1
 fi
 
 mkdir -p /opt/cursor/artifacts
-cp "$APK" /opt/cursor/artifacts/reelix-debug.apk
-echo "APK: $ROOT/android/$APK"
-echo "Artifact: /opt/cursor/artifacts/reelix-debug.apk"
-ls -lh /opt/cursor/artifacts/reelix-debug.apk
+cp "$UNIVERSAL" /opt/cursor/artifacts/reelix-universal.apk
+cp "$UNIVERSAL" /opt/cursor/artifacts/reelix-debug.apk
+cp "$ARM32" /opt/cursor/artifacts/reelix-armeabi-v7a.apk
+cp "$ARM64" /opt/cursor/artifacts/reelix-arm64-v8a.apk
+python3 - << 'PY'
+import os
+limit = 24 * 1024 * 1024
+root = "/opt/cursor/artifacts"
+for name in ("reelix-armeabi-v7a.apk", "reelix-arm64-v8a.apk", "reelix-universal.apk"):
+    size = os.path.getsize(os.path.join(root, name))
+    print(f"{name} {size}")
+    if name != "reelix-universal.apk" and size >= limit:
+        raise SystemExit(f"{name} is {size} bytes, over 24 MB")
+PY
+ls -lh /opt/cursor/artifacts/reelix-universal.apk /opt/cursor/artifacts/reelix-armeabi-v7a.apk /opt/cursor/artifacts/reelix-arm64-v8a.apk

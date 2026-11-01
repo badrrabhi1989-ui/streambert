@@ -111,17 +111,17 @@ fs.writeFileSync(
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"
             android:name=".MainActivity"
-            android:label="@string/title_activity_main"
+            android:label="@string/app_name"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:banner="@drawable/tv_banner"
             android:launchMode="singleTask"
             android:exported="true">
 
-            <intent-filter>
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
@@ -130,6 +130,7 @@ fs.writeFileSync(
 
         <activity
             android:name=".PlayerActivity"
+            android:label="@string/app_name"
             android:exported="false"
             android:theme="@style/AppTheme.Player"
             android:launchMode="singleTop"
@@ -138,6 +139,7 @@ fs.writeFileSync(
 
         <activity
             android:name=".PopoutActivity"
+            android:label="@string/app_name"
             android:exported="false"
             android:theme="@style/AppTheme.NoActionBar"
             android:supportsPictureInPicture="true"

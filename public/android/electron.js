@@ -11,7 +11,13 @@
       document.documentElement.classList.add("emberlane");
       document.documentElement.style.cursor = "none";
       var vp = document.querySelector('meta[name="viewport"]');
-      if (vp) vp.setAttribute("content", "width=1920, initial-scale=1, user-scalable=no");
+      var scale = boot.tvScale || 1;
+      if (vp) {
+        vp.setAttribute(
+          "content",
+          "width=1920, initial-scale=" + scale + ", minimum-scale=" + scale + ", maximum-scale=" + scale + ", user-scalable=no",
+        );
+      }
     } catch (e) {}
   }
   var busListeners = new Map();

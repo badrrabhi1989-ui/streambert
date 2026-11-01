@@ -25,7 +25,9 @@
         android:gravity="center"
         android:orientation="vertical"
         android:padding="72dp"
-        android:background="#CC070B24">
+        android:background="#E6040F2D"
+        android:focusable="false"
+        android:clickable="false">
 
         <ProgressBar
             android:layout_width="64dp"
@@ -39,7 +41,7 @@
             android:layout_marginTop="24dp"
             android:gravity="center"
             android:textColor="#F4F2FB"
-            android:textSize="28sp" />
+            android:textSize="26sp" />
     </LinearLayout>
 
     <LinearLayout
@@ -48,11 +50,11 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:orientation="vertical"
-        android:paddingLeft="64dp"
-        android:paddingRight="64dp"
-        android:paddingBottom="36dp"
-        android:paddingTop="28dp"
-        android:background="#CC070B24"
+        android:paddingLeft="48dp"
+        android:paddingRight="48dp"
+        android:paddingBottom="28dp"
+        android:paddingTop="22dp"
+        android:background="#F0040F2D"
         android:visibility="gone">
 
         <TextView
@@ -62,22 +64,59 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="#F4F2FB"
-            android:textSize="30sp"
+            android:textSize="28sp"
             android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/player_time"
+        <LinearLayout
+            android:id="@+id/seek_row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="#FFB15A"
-            android:textSize="20sp" />
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:focusable="true"
+            android:clickable="true"
+            android:background="@android:color/transparent"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
+
+            <TextView
+                android:id="@+id/time_pos"
+                android:layout_width="88dp"
+                android:layout_height="wrap_content"
+                android:text="0:00"
+                android:textColor="#F4F2FB"
+                android:textSize="18sp" />
+
+            <ProgressBar
+                android:id="@+id/seek_bar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="12dp"
+                android:layout_weight="1"
+                android:max="1000"
+                android:progress="0"
+                android:progressTint="#E23CA8"
+                android:progressBackgroundTint="#33FFFFFF"
+                android:focusable="false" />
+
+            <TextView
+                android:id="@+id/time_dur"
+                android:layout_width="88dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="--:--"
+                android:textColor="#C8C6D8"
+                android:textSize="18sp" />
+        </LinearLayout>
 
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:scrollbars="none">
+            android:layout_marginTop="8dp"
+            android:scrollbars="none"
+            android:focusable="false"
+            android:descendantFocusability="afterDescendants">
 
             <LinearLayout
                 android:id="@+id/player_actions"
@@ -89,10 +128,12 @@
         <ScrollView
             android:id="@+id/player_menu_scroll"
             android:layout_width="match_parent"
-            android:layout_height="280dp"
+            android:layout_height="240dp"
             android:layout_marginTop="12dp"
             android:fillViewport="false"
             android:scrollbars="none"
+            android:focusable="false"
+            android:descendantFocusability="afterDescendants"
             android:visibility="gone">
 
             <LinearLayout
@@ -106,8 +147,8 @@
             android:id="@+id/player_hint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="OK select    Left / Right move    Down opens the list    Back closes"
+            android:layout_marginTop="10dp"
+            android:text="Left and right seek    OK selects    Back closes"
             android:textColor="#A9A6C4"
             android:textSize="16sp" />
     </LinearLayout>

@@ -386,6 +386,7 @@ export default function TvApp() {
         startMs: extra.startMs || 0,
         handoff: extra.handoff || "",
         audioLang: localStorage.getItem(AUDIO_PREF) || "",
+        hasNext: kind === "tv",
       });
       if (typeof result?.audioLang === "string" && result.audioLang) {
         localStorage.setItem(AUDIO_PREF, result.audioLang);
@@ -408,10 +409,20 @@ export default function TvApp() {
         });
         setShelf(loadShelf());
       }
+      if (result?.next && kind === "tv") {
+        const nextEpisode = (episodeNo || 1) + 1;
+        setSeason(seasonNo || 1);
+        await play(item, {
+          season: seasonNo || 1,
+          episode: nextEpisode,
+          handoff: extra.handoff || "",
+        });
+        return;
+      }
       if (result && result.ok === false) setToast(result.error || "That title did not start.");
       else setToast("");
     } catch (error) {
-      setToast(error.message || "Playback failed");
+      setToast(error.message || "Playback did not start.");
     }
   };
 
@@ -669,11 +680,11 @@ function Details({ item, logo, season, episodes, cast, resume, onSeason, onPlay 
           <div className="row-head">Cast</div>
           <div className="cast">
             {cast.map((person) => (
-              <div className="person" key={person.cast_id || person.credit_id || person.id}>
+              <button className="person tv-item" type="button" tabIndex={0} key={person.cast_id || person.credit_id || person.id}>
                 {person.profile_path ? <img src={imgUrl(person.profile_path, "w185")} alt="" /> : <div className="ph" />}
                 <b>{person.name}</b>
                 <span>{person.character}</span>
-              </div>
+              </button>
             ))}
           </div>
         </>

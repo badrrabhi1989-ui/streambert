@@ -2,6 +2,10 @@ package com.truelockmc.streambert
 
 import android.app.Activity
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -13,13 +17,16 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import java.util.ArrayList
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
@@ -27,18 +34,17 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
-import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
-import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Full-screen TV player. Provider pages are resolved to an HLS/MP4/DASH URL,
- * then Media3 plays that URL. OK or Down opens the remote overlay.
+ * Full-screen player. Provider pages resolve to a direct stream, then Media3
+ * plays it. The remote overlay is a row of focusable controls.
  */
 @UnstableApi
 class PlayerActivity : Activity() {
@@ -57,13 +63,15 @@ class PlayerActivity : Activity() {
     private var handoff = ""
     private var preferredLang = ""
     private var chosenLang = ""
-    private var audioEnsured = false
+    private var audioLocked = false
+    private var nextRequested = false
     private var currentHit: StreamResolver.Hit? = null
     private var overlay = false
     private var menuOpen = false
-    private var actionFocus = 0
-    private var menuFocus = 0
-    private var menu = emptyList<Choice>()
+    private var subSize = 1
+    private var subStyle = 0
+    private var speed = 1f
+    private var aspect = 0
     private var hideControls: Runnable? = null
     private lateinit var root: FrameLayout
     private lateinit var playerView: PlayerView
@@ -71,16 +79,22 @@ class PlayerActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var controls: LinearLayout
     private lateinit var titleView: TextView
-    private lateinit var timeView: TextView
+    private lateinit var seekRow: LinearLayout
+    private lateinit var timePos: TextView
+    private lateinit var timeDur: TextView
+    private lateinit var seekBar: ProgressBar
     private lateinit var actionsRow: LinearLayout
     private lateinit var menuScroll: ScrollView
     private lateinit var menuList: LinearLayout
     private lateinit var hintView: TextView
+    private lateinit var playButton: TextView
+    private lateinit var volumeButton: TextView
+    private var menuAnchor: View? = null
 
     private val ticker = object : Runnable {
         override fun run() {
-            if (overlay) updateTime()
-            main.postDelayed(this, 1000)
+            if (overlay) refreshChrome()
+            main.postDelayed(this, 250)
         }
     }
 
@@ -89,15 +103,20 @@ class PlayerActivity : Activity() {
         val navy = Color.parseColor("#040F2D")
         window.statusBarColor = navy
         window.navigationBarColor = navy
+        window.setBackgroundDrawable(ColorDrawable(navy))
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_player)
         root = findViewById(R.id.player_root)
+        root.setBackgroundColor(navy)
         playerView = findViewById(R.id.player_view)
         status = findViewById(R.id.player_status)
         statusText = findViewById(R.id.player_status_text)
         controls = findViewById(R.id.player_controls)
         titleView = findViewById(R.id.player_title)
-        timeView = findViewById(R.id.player_time)
+        seekRow = findViewById(R.id.seek_row)
+        timePos = findViewById(R.id.time_pos)
+        timeDur = findViewById(R.id.time_dur)
+        seekBar = findViewById(R.id.seek_bar)
         actionsRow = findViewById(R.id.player_actions)
         menuScroll = findViewById(R.id.player_menu_scroll)
         menuList = findViewById(R.id.player_menu)
@@ -106,6 +125,7 @@ class PlayerActivity : Activity() {
         startMs = intent.getLongExtra("startMs", 0L)
         handoff = intent.getStringExtra("handoff").orEmpty()
         preferredLang = AudioLabels.languageCode(intent.getStringExtra("audioLang"))
+        wireControls()
         main.post(ticker)
         val direct = intent.getStringExtra("directUrl")
         if (!direct.isNullOrBlank()) {
@@ -127,9 +147,62 @@ class PlayerActivity : Activity() {
         tryNext()
     }
 
+    private fun wireControls() {
+        styleSeek(false)
+        seekRow.setOnFocusChangeListener { _, focused -> styleSeek(focused) }
+        seekRow.setOnClickListener { seekBy(10_000) }
+        actionsRow.removeAllViews()
+        playButton = pill("Play") { toggle() }
+        volumeButton = pill("Volume") { openMenu("volume", volumeButton) }
+        actionsRow.addView(playButton)
+        actionsRow.addView(pill("-10s") { seekBy(-10_000); poke() })
+        actionsRow.addView(pill("+10s") { seekBy(10_000); poke() })
+        actionsRow.addView(volumeButton)
+        actionsRow.addView(pill("Subtitles") { openMenu("subs", it) })
+        actionsRow.addView(pill("Audio") { openMenu("audio", it) })
+        actionsRow.addView(pill("Speed") { openMenu("speed", it) })
+        actionsRow.addView(pill("Zoom") { openMenu("aspect", it) })
+        actionsRow.addView(pill("Quality") { openMenu("quality", it) })
+        actionsRow.addView(pill("Source") { openMenu("source", it) })
+        actionsRow.addView(pill("Next") { playNext() })
+        actionsRow.addView(pill("External") { openExternal() })
+    }
+
+    private fun pill(label: String, onClick: (View) -> Unit): TextView {
+        return TextView(this).apply {
+            text = label
+            textSize = 18f
+            setPadding(28, 16, 28, 16)
+            isFocusable = true
+            isClickable = true
+            isSingleLine = true
+            setOnClickListener { onClick(this) }
+            setOnFocusChangeListener { v, focused -> stylePill(v as TextView, focused) }
+            stylePill(this, false)
+            val pad = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+            pad.marginEnd = 12
+            layoutParams = pad
+        }
+    }
+
+    private fun stylePill(view: TextView, focused: Boolean) {
+        val bg = GradientDrawable()
+        bg.cornerRadius = 18f
+        bg.setColor(if (focused) Color.parseColor("#F4F5F7") else Color.parseColor("#22FFFFFF"))
+        view.background = bg
+        view.setTextColor(if (focused) Color.parseColor("#111318") else Color.parseColor("#F4F2FB"))
+    }
+
+    private fun styleSeek(focused: Boolean) {
+        seekRow.setBackgroundColor(if (focused) Color.parseColor("#33E23CA8") else Color.TRANSPARENT)
+    }
+
     private fun tryNext() {
         releasePlayer()
-        audioEnsured = false
+        audioLocked = false
         if (index >= sources.length()) {
             showStatus("None of the sources started. Try another title, or check the network.")
             return
@@ -170,7 +243,7 @@ class PlayerActivity : Activity() {
         resolver = StreamResolver(this)
         index = sourceIndex
         ready = false
-        menuOpen = false
+        closeMenu()
         tryNext()
     }
 
@@ -182,13 +255,13 @@ class PlayerActivity : Activity() {
         playingIndex = sourceIndex
         if (handoff == "external") {
             val title = intent.getStringExtra("title") ?: label
-            val opened = ExternalPlayer.open(this, hit.url, title, hit.headers, hit.subtitles, 0L)
-            if (opened) {
+            val opened = ExternalPlayer.open(this, hit.url, title, hit.headers, hit.subtitles, startMs)
+            if (opened.ok) {
                 ready = true
                 report()
                 finish()
             } else {
-                showStatus("No external player found. Install VLC, MX Player, or Just Player.")
+                showStatus(opened.detail)
             }
             return
         }
@@ -222,34 +295,38 @@ class PlayerActivity : Activity() {
         exo.setMediaItem(builder.build(), startMs.coerceAtLeast(0L))
         exo.playWhenReady = true
         configureAudio(exo)
+        exo.setPlaybackParameters(PlaybackParameters(speed))
         player = exo
         playerView.player = exo
+        applySubtitles()
+        applyAspect()
         exo.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
                     ready = true
                     status.visibility = View.GONE
-                    updateTime()
+                    ensureAudible()
+                    refreshChrome()
+                    if (!overlay) showOverlay()
                 }
             }
 
             override fun onTracksChanged(tracks: Tracks) {
                 ensureAudio(tracks)
-                if (menuOpen) render()
+                if (menuOpen) renderMenu(menuAnchor)
             }
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.w(TAG, "player ${error.errorCodeName} ${error.message}")
                 if (!ready) {
-                    showStatus("$label failed. Trying the next source…")
+                    showStatus("$label did not start. Trying the next source…")
                     main.post { tryNext() }
                 } else {
-                    showStatus(error.errorCodeName)
+                    showStatus("Playback stopped (${error.errorCodeName}).")
                 }
             }
         })
         exo.prepare()
-        applySubtitles()
     }
 
     private fun newPlayer(http: DefaultHttpDataSource.Factory): ExoPlayer {
@@ -261,23 +338,9 @@ class PlayerActivity : Activity() {
                 .build()
         }
         return try {
-            val factory = NextRenderersFactory(this).apply {
+            val factory = ReelixRenderersFactory(this).apply {
                 setEnableDecoderFallback(true)
                 setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-                setMediaCodecSelector(object : MediaCodecSelector {
-                    override fun getDecoderInfos(
-                        mimeType: String,
-                        requiresSecureDecoder: Boolean,
-                        requiresTunnelingDecoder: Boolean,
-                    ): List<MediaCodecInfo> {
-                        if (mimeType in SURROUND) return emptyList()
-                        return MediaCodecSelector.DEFAULT.getDecoderInfos(
-                            mimeType,
-                            requiresSecureDecoder,
-                            requiresTunnelingDecoder,
-                        )
-                    }
-                })
             }
             build(factory)
         } catch (error: Throwable) {
@@ -303,10 +366,13 @@ class PlayerActivity : Activity() {
         exo.volume = 1f
         val selection = selection(exo)
             .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+            .setMaxAudioChannelCount(2)
             .setPreferredAudioMimeTypes(
                 MimeTypes.AUDIO_AAC,
                 MimeTypes.AUDIO_MPEG,
                 MimeTypes.AUDIO_OPUS,
+                MimeTypes.AUDIO_VORBIS,
+                MimeTypes.AUDIO_FLAC,
                 MimeTypes.AUDIO_AC3,
                 MimeTypes.AUDIO_E_AC3,
                 MimeTypes.AUDIO_DTS,
@@ -321,68 +387,52 @@ class PlayerActivity : Activity() {
             )
         if (preferredLang.isNotBlank()) selection.setPreferredAudioLanguage(preferredLang)
         exo.trackSelectionParameters = selection.build()
+        ensureAudible()
+    }
+
+    private fun ensureAudible() {
+        player?.volume = 1f
+        val manager = getSystemService(AUDIO_SERVICE) as AudioManager
+        val max = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max > 0 && manager.getStreamVolume(AudioManager.STREAM_MUSIC) == 0) {
+            manager.setStreamVolume(AudioManager.STREAM_MUSIC, (max * 0.4f).toInt().coerceAtLeast(1), 0)
+        }
     }
 
     private fun ensureAudio(tracks: Tracks) {
-        if (audioEnsured) return
+        if (audioLocked) return
         val exo = player ?: return
-        val selected = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
-        if (selected != null) {
-            audioEnsured = true
-            logAudio(selected)
-            return
-        }
-        val pick = bestAudio(tracks) ?: return
-        audioEnsured = true
-        exo.trackSelectionParameters = selection(exo)
-            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
-            .setOverrideForType(TrackSelectionOverride(pick.group.mediaTrackGroup, pick.index))
-            .build()
-        val format = pick.group.getTrackFormat(pick.index)
-        Log.i(TAG, "audio ${format.sampleMimeType} ch=${format.channelCount} lang=${format.language}")
-    }
-
-    private fun logAudio(group: Tracks.Group) {
-        for (i in 0 until group.length) {
-            if (!group.isTrackSelected(i)) continue
-            val format = group.getTrackFormat(i)
-            Log.i(TAG, "audio ${format.sampleMimeType} ch=${format.channelCount} lang=${format.language}")
-        }
-    }
-
-    private fun bestAudio(tracks: Tracks): AudioPick? {
-        var best: AudioPick? = null
-        var bestLang = Int.MAX_VALUE
-        var bestMime = Int.MAX_VALUE
+        val flat = ArrayList<AudioRef>()
+        val policy = ArrayList<AudioPolicy.Track>()
         for (group in tracks.groups) {
             if (group.type != C.TRACK_TYPE_AUDIO) continue
             for (i in 0 until group.length) {
-                if (!group.isTrackSupported(i)) continue
                 val format = group.getTrackFormat(i)
-                val langScore = when {
-                    preferredLang.isNotBlank() && AudioLabels.languageCode(format.language) == preferredLang -> 0
-                    preferredLang.isBlank() -> 1
-                    else -> 2
-                }
-                val mimeScore = mimeRank(format.sampleMimeType)
-                if (best == null || langScore < bestLang || (langScore == bestLang && mimeScore < bestMime)) {
-                    best = AudioPick(group, i)
-                    bestLang = langScore
-                    bestMime = mimeScore
-                }
+                flat.add(AudioRef(group, i))
+                policy.add(
+                    AudioPolicy.Track(
+                        format.sampleMimeType,
+                        format.channelCount,
+                        format.language,
+                        group.isTrackSupported(i),
+                    ),
+                )
             }
         }
-        return best
-    }
-
-    private fun mimeRank(mime: String?): Int = when (mime) {
-        MimeTypes.AUDIO_AAC -> 0
-        MimeTypes.AUDIO_MPEG -> 1
-        MimeTypes.AUDIO_OPUS -> 2
-        MimeTypes.AUDIO_AC3 -> 3
-        MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_E_AC3_JOC -> 4
-        MimeTypes.AUDIO_DTS, MimeTypes.AUDIO_DTS_HD -> 5
-        else -> 6
+        if (flat.isEmpty()) return
+        val pick = AudioPolicy.index(policy, preferredLang)
+        if (pick < 0) return
+        val chosen = flat[pick]
+        val format = chosen.group.getTrackFormat(chosen.index)
+        audioLocked = true
+        if (!chosen.group.isTrackSelected(chosen.index)) {
+            exo.trackSelectionParameters = selection(exo)
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                .setOverrideForType(TrackSelectionOverride(chosen.group.mediaTrackGroup, chosen.index))
+                .build()
+        }
+        exo.volume = 1f
+        Log.i(TAG, "audio selected ${format.sampleMimeType} ch=${format.channelCount} lang=${format.language}")
     }
 
     private fun applySubtitles() {
@@ -390,6 +440,33 @@ class PlayerActivity : Activity() {
         exo.trackSelectionParameters = selection(exo)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subsOn)
             .build()
+        val view = playerView.subtitleView ?: return
+        val scale = when (subSize) {
+            0 -> 0.7f
+            2 -> 1.45f
+            else -> 1f
+        }
+        view.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * scale)
+        view.setStyle(captionStyle())
+    }
+
+    private fun captionStyle(): CaptionStyleCompat {
+        val white = Color.WHITE
+        val yellow = Color.parseColor("#FFE14A")
+        return when (subStyle) {
+            1 -> CaptionStyleCompat(yellow, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, Typeface.DEFAULT_BOLD)
+            2 -> CaptionStyleCompat(white, Color.parseColor("#CC000000"), Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_NONE, Color.BLACK, Typeface.DEFAULT)
+            else -> CaptionStyleCompat(white, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, Typeface.DEFAULT)
+        }
+    }
+
+    private fun applyAspect() {
+        playerView.resizeMode = when (aspect) {
+            1 -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            2 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            3 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
     }
 
     private fun releasePlayer() {
@@ -406,15 +483,14 @@ class PlayerActivity : Activity() {
     private fun showOverlay() {
         overlay = true
         controls.visibility = View.VISIBLE
-        updateTime()
-        render()
+        refreshChrome()
+        if (currentFocus == null || currentFocus === root) playButton.requestFocus()
         poke()
     }
 
     private fun hideOverlay() {
         overlay = false
-        menuOpen = false
-        menu = emptyList()
+        closeMenu()
         hideControls?.let { main.removeCallbacks(it) }
         controls.visibility = View.GONE
     }
@@ -424,86 +500,91 @@ class PlayerActivity : Activity() {
         if (!overlay || menuOpen) return
         val task = Runnable { hideOverlay() }
         hideControls = task
-        main.postDelayed(task, 6000)
+        main.postDelayed(task, 7000)
     }
 
     private fun closeMenu() {
         menuOpen = false
-        menu = emptyList()
-        render()
+        menuAnchor = null
+        menuScroll.visibility = View.GONE
+        menuList.removeAllViews()
+        hintView.text = "Left and right move    OK selects    Back closes"
+    }
+
+    private fun openMenu(kind: String, anchor: View) {
+        menuAnchor = anchor
+        menuOpen = true
+        renderMenu(anchor)
         poke()
     }
 
-    private fun render() {
-        actionsRow.removeAllViews()
-        ACTION_IDS.forEachIndexed { i, id ->
-            val label = when (id) {
-                "play" -> if (player?.isPlaying == true) "Pause" else "Play"
-                "subs" -> "Subtitles"
-                "audio" -> "Audio"
-                "source" -> "Source"
-                "quality" -> "Quality"
-                else -> "External"
-            }
-            val focused = overlay && !menuOpen && i == actionFocus
-            actionsRow.addView(actionLabel(label, focused))
+    private fun renderMenu(anchor: View?) {
+        val kind = when (anchor) {
+            volumeButton -> "volume"
+            else -> menuKind(anchor)
         }
-        if (!menuOpen) {
-            menuScroll.visibility = View.GONE
-            hintView.text = "OK select    Left / Right move    Down opens the list    Back closes"
-            return
-        }
+        val choices = choicesFor(kind)
         menuScroll.visibility = View.VISIBLE
         menuList.removeAllViews()
-        hintView.text = "Up / Down move    OK applies    Back closes the list"
-        menu.forEachIndexed { i, choice ->
-            val prefix = if (choice.selected) "✓  " else "    "
-            val view = TextView(this).apply {
-                text = prefix + choice.label
-                textSize = 18f
-                setTextColor(Color.parseColor("#F4F2FB"))
+        hintView.text = "Up and down move    OK applies    Back closes the list"
+        choices.forEachIndexed { i, choice ->
+            val row = TextView(this).apply {
+                text = (if (choice.selected) "✓  " else "    ") + choice.label
+                textSize = 20f
                 setPadding(24, 16, 24, 16)
+                isFocusable = true
+                isClickable = true
                 isSingleLine = true
                 ellipsize = TextUtils.TruncateAt.END
-                isFocusable = false
-                setBackgroundColor(if (i == menuFocus) Color.parseColor("#33E23CA8") else Color.TRANSPARENT)
+                setOnClickListener { choice.apply() }
+                setOnFocusChangeListener { v, focused ->
+                    v.setBackgroundColor(if (focused) Color.parseColor("#F4F5F7") else Color.TRANSPARENT)
+                    (v as TextView).setTextColor(if (focused) Color.parseColor("#111318") else Color.parseColor("#F4F2FB"))
+                    val child = menuList.indexOfChild(v)
+                    if (child >= 0) menuScroll.smoothScrollTo(0, v.top)
+                }
             }
-            menuList.addView(view, LinearLayout.LayoutParams(
+            menuList.addView(row, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ))
-        }
-        menuList.post {
-            val child = menuList.getChildAt(menuFocus) ?: return@post
-            menuScroll.smoothScrollTo(0, child.top)
-        }
-    }
-
-    private fun actionLabel(label: String, focused: Boolean): TextView {
-        return TextView(this).apply {
-            text = label
-            textSize = 18f
-            setTextColor(if (focused) Color.parseColor("#111318") else Color.parseColor("#F4F2FB"))
-            setPadding(28, 16, 28, 16)
-            isSingleLine = true
-            isFocusable = false
-            setBackgroundColor(if (focused) Color.parseColor("#F4F5F7") else Color.TRANSPARENT)
-            val pad = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            )
-            pad.marginEnd = 12
-            layoutParams = pad
+            if (choice.selected || (choices.none { it.selected } && i == 0)) {
+                row.post { row.requestFocus() }
+            }
         }
     }
 
-    private fun updateTime() {
+    private fun menuKind(anchor: View?): String {
+        val label = (anchor as? TextView)?.text?.toString()?.substringBefore(" ") ?: ""
+        return when {
+            label.startsWith("Subtitle") -> "subs"
+            label.startsWith("Audio") -> "audio"
+            label.startsWith("Speed") -> "speed"
+            label.startsWith("Zoom") -> "aspect"
+            label.startsWith("Quality") -> "quality"
+            label.startsWith("Source") -> "source"
+            label.startsWith("Volume") -> "volume"
+            else -> "subs"
+        }
+    }
+
+    private fun refreshChrome() {
         val exo = player
         val pos = exo?.currentPosition?.coerceAtLeast(0L) ?: 0L
-        val dur = exo?.duration?.coerceAtLeast(0L) ?: 0L
-        timeView.text = "${format(pos)}  /  ${if (dur > 0) format(dur) else "--:--"}   ·   $sourceLabel"
-        val play = actionsRow.getChildAt(0) as? TextView
-        if (play != null && !menuOpen) play.text = if (exo?.isPlaying == true) "Pause" else "Play"
+        val dur = exo?.duration?.takeIf { it > 0 } ?: 0L
+        timePos.text = format(pos)
+        timeDur.text = if (dur > 0) format(dur) else "--:--"
+        seekBar.progress = if (dur > 0) ((pos * 1000L) / dur).toInt().coerceIn(0, 1000) else 0
+        playButton.text = if (exo?.isPlaying == true) "Pause" else "Play"
+        volumeButton.text = volumeLabel()
+        titleView.text = intent.getStringExtra("title")?.ifBlank { sourceLabel } ?: sourceLabel
+    }
+
+    private fun volumeLabel(): String {
+        val manager = getSystemService(AUDIO_SERVICE) as AudioManager
+        val max = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val cur = manager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        return "Volume ${cur * 100 / max}%"
     }
 
     private fun format(ms: Long): String {
@@ -517,10 +598,8 @@ class PlayerActivity : Activity() {
     private fun toggle() {
         val exo = player ?: return
         if (exo.isPlaying) exo.pause() else exo.play()
-        if (overlay) {
-            render()
-            poke()
-        }
+        refreshChrome()
+        poke()
     }
 
     private fun seekBy(deltaMs: Long) {
@@ -530,48 +609,56 @@ class PlayerActivity : Activity() {
         if (next < 0) next = 0
         if (dur > 0 && next > dur) next = dur
         exo.seekTo(next)
+        refreshChrome()
     }
 
-    private fun activateAction() {
-        when (ACTION_IDS[actionFocus]) {
-            "play" -> toggle()
-            "external" -> openExternal()
-            else -> openMenu(ACTION_IDS[actionFocus])
+    private fun nudgeVolume(up: Boolean) {
+        val manager = getSystemService(AUDIO_SERVICE) as AudioManager
+        manager.adjustStreamVolume(
+            AudioManager.STREAM_MUSIC,
+            if (up) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+            AudioManager.FLAG_SHOW_UI,
+        )
+        player?.volume = 1f
+        refreshChrome()
+    }
+
+    private fun playNext() {
+        if (intent.getBooleanExtra("hasNext", false)) {
+            nextRequested = true
+            ready = true
+            close()
+        } else {
+            showStatus("No next episode for this title.")
+            main.postDelayed({ if (ready) status.visibility = View.GONE }, 1400)
         }
-    }
-
-    private fun onDown() {
-        val id = ACTION_IDS[actionFocus]
-        if (id == "subs" || id == "audio" || id == "source" || id == "quality") openMenu(id)
-    }
-
-    private fun openMenu(kind: String) {
-        menu = when (kind) {
-            "subs" -> subtitleChoices()
-            "audio" -> audioChoices()
-            "source" -> sourceChoices()
-            "quality" -> qualityChoices()
-            else -> emptyList()
-        }
-        val current = menu.indexOfFirst { it.selected }
-        menuFocus = if (current < 0) 0 else current
-        menuOpen = true
-        render()
-        poke()
     }
 
     private fun openExternal() {
         val hit = currentHit
         if (hit == null) {
-            timeView.text = "The stream is not ready yet"
+            showStatus("The stream is not ready yet.")
             return
         }
         player?.pause()
         val title = intent.getStringExtra("title") ?: sourceLabel
         val pos = player?.currentPosition ?: 0L
         val opened = ExternalPlayer.open(this, hit.url, title, hit.headers, hit.subtitles, pos)
-        if (!opened) timeView.text = "No external player found. Install VLC, MX Player, or Just Player."
-        render()
+        if (!opened.ok) showStatus(opened.detail)
+        refreshChrome()
+    }
+
+    private fun choicesFor(kind: String): List<Choice> {
+        return when (kind) {
+            "subs" -> subtitleChoices()
+            "audio" -> audioChoices()
+            "source" -> sourceChoices()
+            "quality" -> qualityChoices()
+            "speed" -> speedChoices()
+            "aspect" -> aspectChoices()
+            "volume" -> volumeChoices()
+            else -> emptyList()
+        }
     }
 
     private fun subtitleChoices(): List<Choice> {
@@ -580,9 +667,7 @@ class PlayerActivity : Activity() {
         val textDisabled = exo.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
         out.add(Choice("Off", textDisabled || !subsOn) {
             subsOn = false
-            exo.trackSelectionParameters = selection(exo)
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                .build()
+            applySubtitles()
             closeMenu()
         })
         for (group in exo.currentTracks.groups) {
@@ -597,11 +682,17 @@ class PlayerActivity : Activity() {
                         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                         .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, i))
                         .build()
+                    applySubtitles()
                     closeMenu()
                 })
             }
         }
-        if (out.size == 1) out.add(Choice("No subtitle tracks", false) { closeMenu() })
+        out.add(Choice("Size · Small", subSize == 0) { subSize = 0; applySubtitles(); closeMenu() })
+        out.add(Choice("Size · Medium", subSize == 1) { subSize = 1; applySubtitles(); closeMenu() })
+        out.add(Choice("Size · Large", subSize == 2) { subSize = 2; applySubtitles(); closeMenu() })
+        out.add(Choice("Style · White", subStyle == 0) { subStyle = 0; applySubtitles(); closeMenu() })
+        out.add(Choice("Style · Yellow", subStyle == 1) { subStyle = 1; applySubtitles(); closeMenu() })
+        out.add(Choice("Style · Boxed", subStyle == 2) { subStyle = 2; applySubtitles(); closeMenu() })
         return out
     }
 
@@ -647,7 +738,8 @@ class PlayerActivity : Activity() {
             .build()
         val code = AudioLabels.languageCode(language)
         if (code.isNotBlank()) chosenLang = code
-        audioEnsured = true
+        audioLocked = true
+        exo.volume = 1f
         val format = group.getTrackFormat(trackIndex)
         Log.i(TAG, "audio pick ${format.sampleMimeType} ch=${format.channelCount} lang=$code")
     }
@@ -694,153 +786,131 @@ class PlayerActivity : Activity() {
         return out
     }
 
+    private fun speedChoices(): List<Choice> {
+        val speeds = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+        return speeds.map { value ->
+            val label = if (value == 1f) "Normal" else "${value}×"
+            Choice(label, speed == value) {
+                speed = value
+                player?.setPlaybackParameters(PlaybackParameters(value))
+                closeMenu()
+            }
+        }
+    }
+
+    private fun aspectChoices(): List<Choice> {
+        val labels = arrayOf("Fit", "Fill", "Zoom", "16:9")
+        return labels.mapIndexed { i, label ->
+            Choice(label, aspect == i) {
+                aspect = i
+                applyAspect()
+                closeMenu()
+            }
+        }
+    }
+
+    private fun volumeChoices(): List<Choice> {
+        return listOf(
+            Choice("Louder", false) { nudgeVolume(true) },
+            Choice("Quieter", false) { nudgeVolume(false) },
+            Choice("Player volume full", player?.volume == 1f) {
+                player?.volume = 1f
+                closeMenu()
+            },
+        )
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
-        if (handleKey(event.keyCode)) return true
+        val back = event.keyCode == KeyEvent.KEYCODE_BACK || event.keyCode == KeyEvent.KEYCODE_ESCAPE
+        if (back && event.action != KeyEvent.ACTION_DOWN) return true
+        if (event.action == KeyEvent.ACTION_DOWN && handleKey(event.keyCode)) return true
+        if (overlay && event.action == KeyEvent.ACTION_DOWN) poke()
         return super.dispatchKeyEvent(event)
     }
 
     private fun handleKey(code: Int): Boolean {
-        if (menuOpen) {
-            when (code) {
-                KeyEvent.KEYCODE_DPAD_UP -> {
-                    menuFocus = (menuFocus - 1).coerceAtLeast(0)
-                    render()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    menuFocus = (menuFocus + 1).coerceAtMost(menu.lastIndex.coerceAtLeast(0))
-                    render()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                    menu.getOrNull(menuFocus)?.apply?.invoke()
-                    return true
-                }
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
-                    closeMenu()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> {
-                    toggle()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                    player?.play()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                    player?.pause()
-                    return true
-                }
+        if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) {
+            if (menuOpen) {
+                val back = menuAnchor
+                closeMenu()
+                back?.requestFocus()
+                return true
             }
-            return false
+            if (overlay) {
+                hideOverlay()
+                return true
+            }
+            close()
+            return true
         }
-        if (overlay) {
+        if (!overlay) {
             when (code) {
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    actionFocus = (actionFocus - 1 + ACTION_IDS.size) % ACTION_IDS.size
-                    render()
-                    poke()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    actionFocus = (actionFocus + 1) % ACTION_IDS.size
-                    render()
-                    poke()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    onDown()
-                    poke()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_UP -> {
-                    poke()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                    activateAction()
-                    poke()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> {
-                    toggle()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                    player?.play()
-                    render()
-                    poke()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                    player?.pause()
-                    render()
-                    poke()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_REWIND, KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND, KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
                     seekBy(-10_000)
-                    updateTime()
-                    poke()
                     return true
                 }
-                KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                    seekBy(if (code == KeyEvent.KEYCODE_MEDIA_NEXT) 30_000 else 10_000)
-                    updateTime()
-                    poke()
+                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                    seekBy(10_000)
                     return true
                 }
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
-                    hideOverlay()
+                KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                    playNext()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MENU -> {
+                    showOverlay()
+                    return true
+                }
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> {
+                    toggle()
+                    return true
+                }
+                KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                    player?.play()
+                    return true
+                }
+                KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                    player?.pause()
                     return true
                 }
             }
             return false
         }
-        when (code) {
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                actionFocus = 0
-                showOverlay()
-                return true
-            }
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> {
-                toggle()
-                return true
-            }
-            KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                player?.play()
-                return true
-            }
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                player?.pause()
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND, KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                seekBy(-10_000)
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                seekBy(10_000)
-                return true
-            }
-            KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                seekBy(30_000)
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_INFO -> return true
-            KeyEvent.KEYCODE_CAPTIONS, KeyEvent.KEYCODE_PROG_RED, KeyEvent.KEYCODE_BOOKMARK -> {
-                subsOn = !subsOn
-                applySubtitles()
-                showStatus(if (subsOn) "Subtitles on" else "Subtitles off")
-                main.postDelayed({ if (ready) status.visibility = View.GONE }, 900)
-                return true
-            }
-            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
-                close()
-                return true
-            }
+        if (code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code == KeyEvent.KEYCODE_HEADSETHOOK) {
+            toggle()
+            return true
+        }
+        if (code == KeyEvent.KEYCODE_MEDIA_PLAY) {
+            player?.play()
+            refreshChrome()
+            return true
+        }
+        if (code == KeyEvent.KEYCODE_MEDIA_PAUSE) {
+            player?.pause()
+            refreshChrome()
+            return true
+        }
+        if (code == KeyEvent.KEYCODE_MEDIA_REWIND || code == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+            seekBy(-10_000)
+            return true
+        }
+        if (code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+            seekBy(10_000)
+            return true
+        }
+        if (code == KeyEvent.KEYCODE_MEDIA_NEXT) {
+            playNext()
+            return true
+        }
+        val seekFocused = currentFocus?.id == R.id.seek_row
+        if (seekFocused && code == KeyEvent.KEYCODE_DPAD_LEFT) {
+            seekBy(-10_000)
+            return true
+        }
+        if (seekFocused && code == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            seekBy(10_000)
+            return true
         }
         return false
     }
@@ -855,13 +925,14 @@ class PlayerActivity : Activity() {
         reported = true
         val exo = player
         val result = JSONObject()
-            .put("ok", ready)
+            .put("ok", ready || nextRequested)
             .put("positionMs", exo?.currentPosition ?: 0L)
             .put("durationMs", exo?.duration ?: 0L)
             .put("sourceId", sourceId)
             .put("ended", exo?.playbackState == Player.STATE_ENDED)
         if (chosenLang.isNotBlank()) result.put("audioLang", chosenLang)
-        if (!ready) result.put("error", statusText.text?.toString() ?: "Playback did not start")
+        if (nextRequested) result.put("next", true)
+        if (!ready && !nextRequested) result.put("error", statusText.text?.toString() ?: "Playback did not start")
         StreambertEngine.finishPlayback(result)
     }
 
@@ -886,18 +957,9 @@ class PlayerActivity : Activity() {
     }
 
     private data class Choice(val label: String, val selected: Boolean, val apply: () -> Unit)
-    private data class AudioPick(val group: Tracks.Group, val index: Int)
+    private data class AudioRef(val group: Tracks.Group, val index: Int)
 
     companion object {
         private const val TAG = "Emberlane"
-        private val ACTION_IDS = arrayOf("play", "subs", "audio", "source", "quality", "external")
-        private val SURROUND = setOf(
-            MimeTypes.AUDIO_AC3,
-            MimeTypes.AUDIO_E_AC3,
-            MimeTypes.AUDIO_E_AC3_JOC,
-            MimeTypes.AUDIO_DTS,
-            MimeTypes.AUDIO_DTS_HD,
-            MimeTypes.AUDIO_TRUEHD,
-        )
     }
 }

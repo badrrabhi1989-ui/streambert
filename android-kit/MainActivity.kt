@@ -5,8 +5,12 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
 import android.view.KeyEvent
+import android.view.ViewGroup
 import android.webkit.WebView
+import android.widget.FrameLayout
+import android.widget.ImageView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -34,9 +38,19 @@ class MainActivity : BridgeActivity() {
         StreambertEngine.install(this, bridge)
         bridge.webView.setBackgroundColor(navy)
         bridge.webView.requestFocus()
-        if (!uiReady) {
-            Handler(Looper.getMainLooper()).postDelayed({ uiReady = true }, 15_000)
+        val cover = holdNavyCover(navy)
+        val main = Handler(Looper.getMainLooper())
+        val reveal = object : Runnable {
+            override fun run() {
+                if (uiReady) {
+                    (cover.parent as? ViewGroup)?.removeView(cover)
+                } else {
+                    main.postDelayed(this, 32)
+                }
+            }
         }
+        main.post(reveal)
+        if (!uiReady) main.postDelayed({ uiReady = true }, 15_000)
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
@@ -52,6 +66,20 @@ class MainActivity : BridgeActivity() {
                 }
             },
         )
+    }
+
+    private fun holdNavyCover(navy: Int): FrameLayout {
+        val content = findViewById<ViewGroup>(android.R.id.content)
+        val cover = FrameLayout(this)
+        cover.setBackgroundColor(navy)
+        cover.isClickable = true
+        val logo = ImageView(this)
+        logo.setImageResource(R.mipmap.ic_launcher)
+        logo.scaleType = ImageView.ScaleType.FIT_CENTER
+        val size = (160 * resources.displayMetrics.density).toInt()
+        cover.addView(logo, FrameLayout.LayoutParams(size, size, Gravity.CENTER))
+        content.addView(cover, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        return cover
     }
 
     override fun onDestroy() {

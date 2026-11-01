@@ -85,11 +85,12 @@ html.emberlane * {
 
 .rail:focus-within .brand b { opacity: 1; }
 
-.rail-btn, .btn, .key, .poster, .chip, .ep, .field {
+.rail-btn, .btn, .key, .poster, .chip, .ep, .field, .person {
   border: 0;
   font: inherit;
   color: inherit;
   text-align: left;
+  background: transparent;
 }
 
 .rail-btn {
@@ -374,7 +375,7 @@ html.emberlane * {
   padding: 8px 4px 24px;
 }
 .cast::-webkit-scrollbar { display: none; }
-.person { width: 140px; flex: 0 0 140px; text-align: center; }
+.person { width: 140px; flex: 0 0 140px; text-align: center; padding: 0; }
 .person img, .person .ph {
   width: 112px;
   height: 112px;
