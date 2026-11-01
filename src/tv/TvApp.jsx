@@ -365,7 +365,7 @@ export default function TvApp() {
   return (
     <div className="ember">
       <nav className="rail">
-        <div className="wordmark">EMBER<span>LANE</span></div>
+        <div className="wordmark">REELIX</div>
         {RAIL.map(([id, label]) => (
           <button
             key={id}
@@ -384,7 +384,7 @@ export default function TvApp() {
         {!ready ? null : !apiKey && view !== "settings" ? (
           <section className="welcome">
             <div className="kicker">A living room, not a desktop</div>
-            <h1>EMBERLANE</h1>
+            <h1>REELIX</h1>
             <p className="overview">
               Add a TMDB read token and the shelves fill in. Playback runs in the TV player, with the next source ready when one embed refuses.
             </p>
@@ -440,7 +440,7 @@ export default function TvApp() {
 function Home({ data, shelf, onOpen, onPlay }) {
   const hero = data?.hero;
   if (!hero) {
-    return <section className="welcome"><h1>EMBERLANE</h1><p className="overview">Loading the shelves…</p></section>;
+    return <section className="welcome"><h1>REELIX</h1><p className="overview">Loading the shelves…</p></section>;
   }
   return (
     <section className="home">

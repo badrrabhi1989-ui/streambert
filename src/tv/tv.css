@@ -4,7 +4,7 @@ html.emberlane #root {
   width: 1920px;
   height: 1080px;
   overflow: hidden !important;
-  background: #100c09;
+  background: #070B24;
 }
 
 .ember {
@@ -13,9 +13,10 @@ html.emberlane #root {
   display: flex;
   overflow: hidden;
   background:
-    radial-gradient(1200px 700px at 80% -10%, rgba(255, 107, 61, 0.16), transparent 60%),
-    #100c09;
-  color: #f6efe6;
+    radial-gradient(1100px 640px at 88% -8%, rgba(226, 60, 168, 0.20), transparent 58%),
+    radial-gradient(900px 520px at 0% 110%, rgba(124, 92, 255, 0.16), transparent 55%),
+    #070B24;
+  color: #F4F2FB;
   font-family: "DM Sans", sans-serif;
 }
 
@@ -29,7 +30,7 @@ html.emberlane #root {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: linear-gradient(180deg, rgba(16, 12, 9, 0.2), rgba(16, 12, 9, 0.72));
+  background: linear-gradient(180deg, rgba(7, 11, 36, 0.2), rgba(7, 11, 36, 0.78));
 }
 
 .wordmark {
@@ -38,10 +39,12 @@ html.emberlane #root {
   letter-spacing: 3px;
   line-height: 1;
   margin: 0 0 28px 8px;
-  color: #ffb088;
+  background: linear-gradient(90deg, #9B6BFF 0%, #FF4FA3 46%, #FF9A3C 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #FFB15A;
 }
-
-.wordmark span { color: #f6efe6; }
 
 .rail-btn, .btn, .key, .poster, .chip, .ep {
   border: 0;
@@ -57,12 +60,12 @@ html.emberlane #root {
   border-radius: 14px;
   padding: 0 18px;
   font-size: 22px;
-  color: #b7aa9e;
+  color: #A9A6C4;
 }
 
 .rail-btn:focus, .rail-btn.active {
-  background: #ff6b3d;
-  color: #1a0d08;
+  background: linear-gradient(100deg, #7C5CFF 0%, #E23CA8 62%, #FF8A3D 145%);
+  color: #ffffff;
   outline: none;
   transform: translateX(4px);
 }
@@ -89,16 +92,16 @@ html.emberlane #root {
   border-radius: 28px;
   overflow: hidden;
   position: relative;
-  background: #1a1410 center/cover no-repeat;
-  box-shadow: inset 0 0 0 1px rgba(255, 176, 136, 0.16);
+  background: #12162E center/cover no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(255, 154, 60, 0.22);
 }
 
 .hero-shade {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(16, 12, 9, 0.94) 0%, rgba(16, 12, 9, 0.55) 46%, rgba(16, 12, 9, 0.15) 100%),
-    linear-gradient(180deg, transparent 40%, rgba(16, 12, 9, 0.88));
+    linear-gradient(90deg, rgba(7, 11, 36, 0.94) 0%, rgba(7, 11, 36, 0.55) 46%, rgba(7, 11, 36, 0.15) 100%),
+    linear-gradient(180deg, transparent 40%, rgba(7, 11, 36, 0.88));
 }
 
 .hero-copy {
@@ -110,7 +113,7 @@ html.emberlane #root {
 }
 
 .kicker {
-  color: #ffb088;
+  color: #FFB15A;
   letter-spacing: 3px;
   font-size: 14px;
   font-weight: 700;
@@ -127,7 +130,7 @@ html.emberlane #root {
 }
 
 .overview {
-  color: #e7ddd2;
+  color: #E4E0F2;
   font-size: 22px;
   line-height: 1.35;
   max-width: 760px;
@@ -149,21 +152,21 @@ html.emberlane #root {
 }
 
 .btn.primary {
-  background: #ff6b3d;
-  color: #1a0d08;
+  background: linear-gradient(100deg, #7C5CFF 0%, #E23CA8 58%, #FF8A3D 140%);
+  color: #ffffff;
 }
 
 .btn:focus, .key:focus, .chip:focus, .ep:focus {
   outline: 3px solid #fff;
   outline-offset: 4px;
-  box-shadow: 0 0 0 6px rgba(255, 107, 61, 0.55);
+  box-shadow: 0 0 0 6px rgba(226, 60, 168, 0.5);
 }
 
 .row-head {
   font-size: 20px;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: #ffb088;
+  color: #FFB15A;
   margin: 0 8px 4px;
 }
 
@@ -193,14 +196,14 @@ html.emberlane #root {
   object-fit: cover;
   border-radius: 16px;
   display: block;
-  background: #2a211c;
+  background: #1A1840;
 }
 
 .poster small {
   display: block;
   margin-top: 8px;
   font-size: 15px;
-  color: #e7ddd2;
+  color: #E4E0F2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -210,7 +213,7 @@ html.emberlane #root {
   transform: scale(1.06);
   outline: 3px solid #fff;
   outline-offset: 4px;
-  box-shadow: 0 16px 40px rgba(255, 107, 61, 0.35);
+  box-shadow: 0 16px 40px rgba(226, 60, 168, 0.38);
   z-index: 2;
 }
 
@@ -232,7 +235,7 @@ html.emberlane #root {
   border-radius: 28px;
   overflow: hidden;
   position: relative;
-  background: #1a1410 center/cover no-repeat;
+  background: #12162E center/cover no-repeat;
   margin-bottom: 22px;
 }
 
@@ -244,7 +247,7 @@ html.emberlane #root {
   max-width: 980px;
 }
 
-.meta { color: #ffb088; font-size: 20px; margin-bottom: 8px; }
+.meta { color: #FFB15A; font-size: 20px; margin-bottom: 8px; }
 
 .chips, .eps { display: flex; gap: 12px; overflow-x: auto; padding: 8px 4px 16px; }
 .chips::-webkit-scrollbar, .eps::-webkit-scrollbar { display: none; }
@@ -257,20 +260,23 @@ html.emberlane #root {
   font-size: 18px;
 }
 
-.chip.on { background: #ff6b3d; color: #1a0d08; }
+.chip.on {
+  background: linear-gradient(100deg, #7C5CFF 0%, #E23CA8 62%, #FF8A3D 145%);
+  color: #ffffff;
+}
 
 .ep { width: 280px; }
 .ep b { display: block; font-size: 18px; margin-bottom: 4px; }
-.ep span { color: #b7aa9e; font-size: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ep span { color: #A9A6C4; font-size: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 .cast { display: flex; gap: 16px; overflow-x: auto; padding: 8px 4px 20px; }
 .cast::-webkit-scrollbar { display: none; }
 .person { width: 140px; flex: 0 0 140px; text-align: center; }
 .person img, .person .ph {
-  width: 120px; height: 120px; border-radius: 60px; object-fit: cover; margin: 0 auto 8px; background: #2a211c; display: block;
+  width: 120px; height: 120px; border-radius: 60px; object-fit: cover; margin: 0 auto 8px; background: #1A1840; display: block;
 }
 .person b, .person span { display: block; font-size: 15px; }
-.person span { color: #b7aa9e; }
+.person span { color: #A9A6C4; }
 
 .grid {
   height: 100%;
@@ -316,14 +322,14 @@ html.emberlane #root {
   margin-bottom: 14px;
 }
 .results { flex: 1; min-width: 0; height: 100%; overflow: hidden; }
-.note { color: #b7aa9e; font-size: 20px; line-height: 1.4; max-width: 760px; }
+.note { color: #A9A6C4; font-size: 20px; line-height: 1.4; max-width: 760px; }
 .field {
   width: min(760px, 100%);
   height: 64px;
   border-radius: 14px;
   border: 0;
-  background: #241c17;
-  color: #f6efe6;
+  background: #161A36;
+  color: #F4F2FB;
   font-size: 22px;
   padding: 0 18px;
   margin: 12px 0;
@@ -333,9 +339,9 @@ html.emberlane #root {
   left: 28px;
   right: 80px;
   bottom: 28px;
-  background: rgba(16, 12, 9, 0.92);
-  border: 1px solid rgba(255, 176, 136, 0.3);
-  color: #f6efe6;
+  background: rgba(7, 11, 36, 0.94);
+  border: 1px solid rgba(255, 154, 60, 0.35);
+  color: #F4F2FB;
   border-radius: 14px;
   padding: 14px 18px;
   font-size: 20px;
@@ -349,8 +355,9 @@ html.emberlane #root {
   padding: 48px;
   border-radius: 28px;
   background:
-    radial-gradient(800px 400px at 70% 20%, rgba(255, 107, 61, 0.35), transparent 60%),
-    linear-gradient(160deg, #2a1812, #100c09 70%);
+    radial-gradient(900px 480px at 78% 16%, rgba(226, 60, 168, 0.42), transparent 62%),
+    radial-gradient(700px 420px at 12% 88%, rgba(124, 92, 255, 0.32), transparent 60%),
+    linear-gradient(160deg, #1A1240, #070B24 72%);
 }
 .welcome h1 {
   font-family: "Bebas Neue", sans-serif;
@@ -358,4 +365,9 @@ html.emberlane #root {
   line-height: 0.86;
   letter-spacing: 2px;
   font-weight: 400;
+  background: linear-gradient(100deg, #8B5CF6 0%, #FF4FA3 42%, #FF9A3C 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #FFB15A;
 }

@@ -61,7 +61,7 @@ class PlayerActivity : Activity() {
         controls = findViewById(R.id.player_controls)
         titleView = findViewById(R.id.player_title)
         timeView = findViewById(R.id.player_time)
-        titleView.text = intent.getStringExtra("title") ?: "Emberlane"
+        titleView.text = intent.getStringExtra("title") ?: "Reelix"
         startMs = intent.getLongExtra("startMs", 0L)
         val direct = intent.getStringExtra("directUrl")
         if (!direct.isNullOrBlank()) {

@@ -23,7 +23,7 @@
         android:gravity="center"
         android:orientation="vertical"
         android:padding="72dp"
-        android:background="#CC100C09">
+        android:background="#CC070B24">
 
         <ProgressBar
             android:layout_width="64dp"
@@ -36,7 +36,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:gravity="center"
-            android:textColor="#F6EFE6"
+            android:textColor="#F4F2FB"
             android:textSize="28sp" />
     </LinearLayout>
 
@@ -50,14 +50,14 @@
         android:paddingRight="64dp"
         android:paddingBottom="48dp"
         android:paddingTop="36dp"
-        android:background="#CC100C09"
+        android:background="#CC070B24"
         android:visibility="gone">
 
         <TextView
             android:id="@+id/player_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#F6EFE6"
+            android:textColor="#F4F2FB"
             android:textSize="32sp"
             android:textStyle="bold" />
 
@@ -66,7 +66,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:textColor="#FFB088"
+            android:textColor="#FFB15A"
             android:textSize="22sp" />
 
         <TextView
@@ -74,7 +74,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="OK play/pause    Left / Right seek    Back close    CC subtitles"
-            android:textColor="#B7AA9E"
+            android:textColor="#A9A6C4"
             android:textSize="16sp" />
     </LinearLayout>
 </FrameLayout>

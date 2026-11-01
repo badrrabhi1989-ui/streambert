@@ -48,7 +48,7 @@ if [[ ! -f "$APK" ]]; then
 fi
 
 mkdir -p /opt/cursor/artifacts
-cp "$APK" /opt/cursor/artifacts/streambert-debug.apk
+cp "$APK" /opt/cursor/artifacts/reelix-debug.apk
 echo "APK: $ROOT/android/$APK"
-echo "Artifact: /opt/cursor/artifacts/streambert-debug.apk"
-ls -lh /opt/cursor/artifacts/streambert-debug.apk
+echo "Artifact: /opt/cursor/artifacts/reelix-debug.apk"
+ls -lh /opt/cursor/artifacts/reelix-debug.apk

@@ -1,12 +1,12 @@
 {
   "appId": "com.truelockmc.streambert",
-  "appName": "Emberlane",
+  "appName": "Reelix",
   "webDir": "dist",
   "android": {
     "allowMixedContent": true,
     "captureInput": true,
     "webContentsDebuggingEnabled": true,
-    "backgroundColor": "#0a0a0a"
+    "backgroundColor": "#070B24"
   },
   "server": {
     "androidScheme": "https",

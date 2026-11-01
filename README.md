@@ -188,9 +188,9 @@ The screens, settings, library, search, player layout, subtitle picker, backups,
 
 ### Android TV
 
-The same APK runs on phones and Android TV. On a television the launcher name is **Emberlane**: a 1920×1080 living-room layout with a left rail, full-bleed hero, poster rows, and a details page whose Play button takes focus first. Cast, seasons, and episodes are rows on that page, inside the TV safe area.
+The same APK runs on phones and Android TV. On a television the launcher name is **Reelix**: a 1920×1080 living-room layout with a left rail, full-bleed hero, poster rows, and a details page whose Play button takes focus first. Cast, seasons, and episodes are rows on that page, inside the TV safe area.
 
-Playback does not use an embed iframe. Those pages often refuse to be framed, which left the old player on "Loading…". Emberlane opens each provider as its own page, takes the HLS, DASH, or MP4 URL, and plays it in a Media3 player. The remote pauses, seeks, and toggles subtitles. If a source never produces a stream, the next one is tried. Vidrift is still first, then VidSrc, Vidfast, Vidlove, Aether, Vidnest, and Frembed.
+Playback does not use an embed iframe. Those pages often refuse to be framed, which left the old player on "Loading…". Reelix opens each provider as its own page, takes the HLS, DASH, or MP4 URL, and plays it in a Media3 player. The remote pauses, seeks, and toggles subtitles. If a source never produces a stream, the next one is tried. Vidrift is still first, then VidSrc, Vidfast, Vidlove, Aether, Vidnest, and Frembed.
 
 API keys can be entered from a phone. On the setup screen and in Settings, **Show pairing code** starts a one-time page on the TV's Wi-Fi address. The TV shows a QR code, the address, and a short code. The phone (on the same network) opens that page, pastes the TMDB token and any Wyzie or SubDL keys, and the TV stores them in the encrypted key store. The page rejects clients that are not on a private network, accepts one successful save, and then stops. It also stops after five bad attempts, when you cancel, or after three minutes.
 
