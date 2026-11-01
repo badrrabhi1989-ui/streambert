@@ -86,6 +86,9 @@ class PlayerActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val navy = Color.parseColor("#040F2D")
+        window.statusBarColor = navy
+        window.navigationBarColor = navy
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_player)
         root = findViewById(R.id.player_root)

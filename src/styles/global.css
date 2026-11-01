@@ -67,7 +67,14 @@
 }
 
 html,
-body,
+body {
+    height: 100%;
+    background: #040F2D;
+    color: var(--text);
+    font-family: var(--font-body);
+    overflow: hidden;
+}
+
 #root {
     height: 100%;
     background: var(--bg);

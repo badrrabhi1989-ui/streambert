@@ -131,7 +131,7 @@ fs.writeFileSync(
         <activity
             android:name=".PlayerActivity"
             android:exported="false"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:theme="@style/AppTheme.Player"
             android:launchMode="singleTop"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:supportsPictureInPicture="false" />
@@ -182,9 +182,9 @@ if (!fs.existsSync(colorsPath)) {
     colorsPath,
     `<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#0a0a0a</color>
-    <color name="colorPrimaryDark">#0a0a0a</color>
-    <color name="colorAccent">#8256d0</color>
+    <color name="colorPrimary">#070B24</color>
+    <color name="colorPrimaryDark">#040F2D</color>
+    <color name="colorAccent">#E23CA8</color>
 </resources>
 `,
   );

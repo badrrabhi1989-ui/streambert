@@ -3,25 +3,40 @@ package com.truelockmc.streambert
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import android.webkit.WebView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.getcapacitor.BridgeActivity
 import org.json.JSONObject
 
 class MainActivity : BridgeActivity() {
+    companion object {
+        @Volatile
+        var uiReady: Boolean = false
+    }
+
     val folderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         StreambertEngine.onFolderPicked(uri)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (savedInstanceState != null) uiReady = true
+        installSplashScreen().setKeepOnScreenCondition { !uiReady }
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.parseColor("#0a0a0a")
-        window.navigationBarColor = Color.parseColor("#0a0a0a")
+        val navy = Color.parseColor("#040F2D")
+        window.statusBarColor = navy
+        window.navigationBarColor = navy
         WebView.setWebContentsDebuggingEnabled(true)
         StreambertEngine.install(this, bridge)
+        bridge.webView.setBackgroundColor(navy)
         bridge.webView.requestFocus()
+        if (!uiReady) {
+            Handler(Looper.getMainLooper()).postDelayed({ uiReady = true }, 15_000)
+        }
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {

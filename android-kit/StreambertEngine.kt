@@ -212,7 +212,7 @@ object StreambertEngine {
         cookies.setAcceptThirdPartyCookies(view, true)
         cookies.setCookie("https://www.youtube.com", "SOCS=CAI; Path=/; Domain=.youtube.com; Secure")
         cookies.setCookie("https://www.youtube-nocookie.com", "SOCS=CAI; Path=/; Domain=.youtube-nocookie.com; Secure")
-        view.setBackgroundColor(0xFF0A0A0A.toInt())
+        view.setBackgroundColor(0xFF040F2D.toInt())
     }
 
     private fun attachPrivileged(view: WebView) {
@@ -313,6 +313,10 @@ object StreambertEngine {
                 "startDownload" -> fail(id, "Downloads have been removed")
                 "startPairing" -> startPairing(id)
                 "playNative" -> playNative(id, args)
+                "uiReady" -> {
+                    main.post { MainActivity.uiReady = true }
+                    complete(id, JSONObject().put("ok", true))
+                }
                 "stopPairing" -> {
                     PairingServer.stop()
                     complete(id, JSONObject().put("ok", true))

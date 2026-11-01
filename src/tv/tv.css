@@ -1,5 +1,12 @@
 html.emberlane,
-html.emberlane body,
+html.emberlane body {
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden !important;
+  background: #040F2D;
+  cursor: none !important;
+}
+
 html.emberlane #root {
   width: 1920px;
   height: 1080px;

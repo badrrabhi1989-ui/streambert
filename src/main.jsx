@@ -10,3 +10,12 @@ const television =
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>{television ? <TvApp /> : <App />}</React.StrictMode>,
 );
+
+// Android holds the navy splash until this first paint. Desktop has no bridge.
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    if (typeof window.__sbCall === "function") {
+      window.__sbCall("uiReady", {}, 5000).catch(() => {});
+    }
+  });
+});
