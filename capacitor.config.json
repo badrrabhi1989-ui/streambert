@@ -1,6 +1,6 @@
 {
   "appId": "com.truelockmc.streambert",
-  "appName": "Streambert",
+  "appName": "Emberlane",
   "webDir": "dist",
   "android": {
     "allowMixedContent": true,

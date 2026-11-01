@@ -163,6 +163,7 @@ contextBridge.exposeInMainWorld("electron", {
   isTelevision: () => ipcRenderer.invoke("is-television"),
   startPhonePairing: () => ipcRenderer.invoke("start-phone-pairing"),
   stopPhonePairing: () => ipcRenderer.invoke("stop-phone-pairing"),
+  playNative: (payload) => ipcRenderer.invoke("play-native", payload),
   onPhoneKeysSaved: (cb) => {
     const h = (_, data) => cb(data);
     ipcRenderer.on("phone-keys-saved", h);

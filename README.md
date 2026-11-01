@@ -176,7 +176,7 @@ Install the debug APK with `adb install -r android/app/build/outputs/apk/debug/a
 
 The screens, settings, library, search, player layout, subtitle picker, backups, and ad-block stats use the same React code and the same `window.electron` method names as the desktop app. A few host capabilities cannot be the desktop implementation:
 
-- **Downloads.** `vid-dl` and `ffmpeg` are desktop binaries. Android uses a built-in downloader (four parallel HLS segments, AES-128, or a direct file). The settings screen still reports a downloader as present. The default folder is the app's Movies directory; you can pick another folder with the system folder picker.
+- **Downloads.** Saving videos for offline playback is not part of the app. Subtitle lookup (Wyzie and SubDL) is unchanged.
 - **Discord Rich Presence.** There is no Discord desktop IPC socket. The settings toggle stays, and the calls return `{ supported: false }`.
 - **Pop-out player.** Picture-in-picture activity with a close button, instead of an always-on-top frameless window. Closing it reloads the player in the main view, same as desktop.
 - **User agent.** One desktop Chrome user agent for the whole WebView. Electron used a second "clean" agent only to strip its own token; Android has no Electron token.
@@ -188,7 +188,9 @@ The screens, settings, library, search, player layout, subtitle picker, backups,
 
 ### Android TV
 
-The same APK runs on phones and Android TV. The manifest does not require a touchscreen, and the activity is a leanback launcher target with a TV banner. On a television the page adds a 10-foot safe area, a high-contrast focus ring, and D-pad navigation across the sidebar, posters, search, library, details, settings, dialogs, and the player. The remote Back button closes a dialog, leaves the player, then steps back through screens. Play/pause, left/right seek, and media keys go to the video while it is open.
+The same APK runs on phones and Android TV. On a television the launcher name is **Emberlane**: a 1920×1080 living-room layout with a left rail, full-bleed hero, poster rows, and a details page whose Play button takes focus first. Cast, seasons, and episodes are rows on that page, inside the TV safe area.
+
+Playback does not use an embed iframe. Those pages often refuse to be framed, which left the old player on "Loading…". Emberlane opens each provider as its own page, takes the HLS, DASH, or MP4 URL, and plays it in a Media3 player. The remote pauses, seeks, and toggles subtitles. If a source never produces a stream, the next one is tried. Vidrift is still first, then VidSrc, Vidfast, Vidlove, Aether, Vidnest, and Frembed.
 
 API keys can be entered from a phone. On the setup screen and in Settings, **Show pairing code** starts a one-time page on the TV's Wi-Fi address. The TV shows a QR code, the address, and a short code. The phone (on the same network) opens that page, pastes the TMDB token and any Wyzie or SubDL keys, and the TV stores them in the encrypted key store. The page rejects clients that are not on a private network, accepts one successful save, and then stops. It also stops after five bad attempts, when you cancel, or after three minutes.
 

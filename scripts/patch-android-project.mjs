@@ -41,6 +41,20 @@ if (!app.includes("jvmTarget")) {
     "    kotlinOptions {\n        jvmTarget = '21'\n    }\n    buildTypes {",
   );
 }
+if (!app.includes("media3-exoplayer")) {
+  app = app.replace(
+    '    implementation "androidx.documentfile:documentfile:1.0.1"\n',
+    [
+      '    implementation "androidx.documentfile:documentfile:1.0.1"',
+      '    implementation "androidx.media3:media3-exoplayer:1.5.1"',
+      '    implementation "androidx.media3:media3-exoplayer-hls:1.5.1"',
+      '    implementation "androidx.media3:media3-exoplayer-dash:1.5.1"',
+      '    implementation "androidx.media3:media3-datasource:1.5.1"',
+      '    implementation "androidx.media3:media3-ui:1.5.1"',
+      "",
+    ].join("\n"),
+  );
+}
 if (!app.includes("okhttp")) {
   app = app.replace(
     "    implementation project(':capacitor-android')\n",
@@ -96,6 +110,14 @@ fs.writeFileSync(
         </activity>
 
         <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:supportsPictureInPicture="false" />
+
+        <activity
             android:name=".PopoutActivity"
             android:exported="false"
             android:theme="@style/AppTheme.NoActionBar"
@@ -103,11 +125,6 @@ fs.writeFileSync(
             android:resizeableActivity="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:launchMode="singleTask" />
-
-        <service
-            android:name=".DownloadService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -123,8 +140,6 @@ fs.writeFileSync(
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>
 `,

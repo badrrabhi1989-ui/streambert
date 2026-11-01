@@ -238,10 +238,7 @@ function ResetConfirmDialog({ onConfirm, onCancel }) {
           }}
         >
           This will permanently delete all your settings, watch history, saved
-          titles, progress data, and cached data. Your downloaded video files
-          will{" "}
-          <span style={{ color: "var(--text)", fontWeight: 600 }}>not</span> be
-          deleted.
+          titles, progress data, and cached data.
           <br />
           <br />
           <span style={{ color: "var(--red)" }}>
@@ -1839,7 +1836,6 @@ function StartPageSection() {
           options={[
             { value: "home", label: "🏠  Home" },
             { value: "history", label: "🕐  Library / History" },
-            { value: "downloads", label: "⬇  Downloads" },
           ]}
         />
         <button className="btn btn-primary" onClick={handleSave}>
@@ -2053,8 +2049,8 @@ function SubtitleSettingsSection() {
           }}
         >
           {enabled
-            ? "Auto-download subtitles when downloading videos"
-            : "Subtitle download disabled"}
+            ? "Look up subtitles while you watch"
+            : "Subtitle lookup is off"}
         </span>
       </div>
 
@@ -2276,9 +2272,6 @@ function SubtitleSettingsSection() {
 
 // ── Notifications Section ─────────────────────────────────────────────────────
 function NotificationsSection() {
-  const [notifyDownload, setNotifyDownload] = useState(
-    () => storage.get(STORAGE_KEYS.NOTIFY_DOWNLOAD_COMPLETE) !== false,
-  );
   const [notifyEpisode, setNotifyEpisode] = useState(() => {
     const stored = storage.get(STORAGE_KEYS.NOTIFY_NEW_EPISODE);
     return stored === null || stored === undefined ? true : !!stored;
@@ -2286,7 +2279,6 @@ function NotificationsSection() {
   const [saved, setSaved] = useState(false);
 
   const saveSettings = () => {
-    storage.set(STORAGE_KEYS.NOTIFY_DOWNLOAD_COMPLETE, notifyDownload);
     storage.set(STORAGE_KEYS.NOTIFY_NEW_EPISODE, notifyEpisode);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -2344,12 +2336,6 @@ function NotificationsSection() {
           marginBottom: 20,
         }}
       >
-        <ToggleRow
-          label="Notify when a download completes"
-          description="Shows a desktop notification when an item finishes downloading."
-          value={notifyDownload}
-          onChange={setNotifyDownload}
-        />
         <ToggleRow
           label="Notify about new episodes on startup"
           description="On startup, checks every TV series you have saved for newly released episodes and notifies you if any aired since the last check."
@@ -2608,30 +2594,7 @@ const SECTION_NAV = [
     id: "subtitles",
     label: "Subtitles",
     icon: "CC",
-    keywords: [
-      "subtitle",
-      "subdl",
-      "wyzie",
-      "language",
-      "caption",
-      "srt",
-      "download",
-      "cc",
-    ],
-  },
-  {
-    id: "downloads",
-    label: "Downloads",
-    icon: "⬇",
-    keywords: [
-      "download",
-      "folder",
-      "path",
-      "save",
-      "video",
-      "movies",
-      "files",
-    ],
+    keywords: ["subtitle", "subdl", "wyzie", "language", "caption", "srt", "cc"],
   },
   {
     id: "notifications",
@@ -3345,9 +3308,6 @@ export default function SettingsPage({
   onChangeApiKey,
   initialSection,
 }) {
-  const [downloadPath, setDownloadPath] = useState(
-    () => storage.get(STORAGE_KEYS.DOWNLOAD_PATH) || "",
-  );
   const [watchedThreshold, setWatchedThreshold] = useState(
     () => storage.get(STORAGE_KEYS.WATCHED_THRESHOLD) ?? 20,
   );
@@ -3367,14 +3327,12 @@ export default function SettingsPage({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetHovered, setResetHovered] = useState(false);
   const [showProgressConfirm, setShowProgressConfirm] = useState(false);
-  const [showDeleteDlConfirm, setShowDeleteDlConfirm] = useState(false);
 
   // ── Section refs for navigation ────────────────────────────────────────────
   const secUpdates = useRef(null);
   const secContent = useRef(null);
   const secPlayback = useRef(null);
   const secSubtitles = useRef(null);
-  const secDownloads = useRef(null);
   const secNotifications = useRef(null);
   const secDiscordRpc = useRef(null);
   const secInterface = useRef(null);
@@ -3387,7 +3345,6 @@ export default function SettingsPage({
     content: secContent,
     playback: secPlayback,
     subtitles: secSubtitles,
-    downloads: secDownloads,
     notifications: secNotifications,
     discordRpc: secDiscordRpc,
     interface: secInterface,
@@ -3481,43 +3438,22 @@ export default function SettingsPage({
   };
 
   // Storage sizes - null = loading, -1 = unavailable, ≥0 = real value
-  const [sizes, setSizes] = useState({ cache: null, downloads: null });
+  const [sizes, setSizes] = useState({ cache: null });
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.electron) {
-      setSizes({ cache: -1, downloads: -1 });
+      setSizes({ cache: -1 });
       return;
     }
     (async () => {
       try {
-        const [cacheRes, downloadsRes] = await Promise.all([
-          window.electron.getCacheSize?.() ?? null,
-          window.electron.getDownloadsSize?.() ?? null,
-        ]);
-        setSizes({
-          cache: cacheRes?.bytes ?? -1,
-          downloads: downloadsRes?.bytes ?? -1,
-        });
+        const cacheRes = (await window.electron.getCacheSize?.()) ?? null;
+        setSizes({ cache: cacheRes?.bytes ?? -1 });
       } catch {
-        setSizes({ cache: -1, downloads: -1 });
+        setSizes({ cache: -1 });
       }
     })();
   }, []);
-
-  const pickFolder = async () => {
-    if (!isElectron) return;
-    const folder = await window.electron.pickFolder();
-    if (folder) {
-      setDownloadPath(folder);
-      storage.set(STORAGE_KEYS.DOWNLOAD_PATH, folder);
-      flash();
-    }
-  };
-
-  const handleSavePath = () => {
-    storage.set(STORAGE_KEYS.DOWNLOAD_PATH, downloadPath);
-    flash();
-  };
 
   const handleSaveThreshold = () => {
     const val = Math.max(1, Math.min(300, Number(watchedThreshold) || 20));
@@ -3548,21 +3484,6 @@ export default function SettingsPage({
     return { msg: "✓ Watch data cleared" };
   };
 
-  const handleDeleteAllDownloads = async () => {
-    let msg = "✓ All downloads removed";
-    setSizes((prev) => ({ ...prev, downloads: 0 }));
-    if (isElectron) {
-      const res = await window.electron.deleteAllDownloads();
-      if (res?.deleted != null) {
-        msg = `✓ Removed ${res.deleted} file${res.deleted !== 1 ? "s" : ""}`;
-        if (res.errors > 0) msg += ` (${res.errors} could not be deleted)`;
-      }
-    } else {
-      storage.remove(STORAGE_KEYS.LOCAL_FILES);
-    }
-    return { msg };
-  };
-
   const handleResetApp = async () => {
     setShowResetConfirm(false);
     if (isElectron) await window.electron.resetApp();
@@ -3591,24 +3512,6 @@ export default function SettingsPage({
             setShowProgressConfirm(false);
             window.__progressConfirmResolve?.({ cancelled: true });
             window.__progressConfirmResolve = null;
-          }}
-        />
-      )}
-      {showDeleteDlConfirm && (
-        <ConfirmDialog
-          title="DELETE ALL DOWNLOADS?"
-          description="This will permanently delete all video files downloaded through Streambert and remove them from the download list."
-          confirmLabel="Yes, Delete All"
-          onConfirm={async () => {
-            setShowDeleteDlConfirm(false);
-            const result = await handleDeleteAllDownloads();
-            window.__deleteDlConfirmResolve?.(result);
-            window.__deleteDlConfirmResolve = null;
-          }}
-          onCancel={() => {
-            setShowDeleteDlConfirm(false);
-            window.__deleteDlConfirmResolve?.({ cancelled: true });
-            window.__deleteDlConfirmResolve = null;
           }}
         />
       )}
@@ -4228,72 +4131,12 @@ export default function SettingsPage({
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════ */}
-        {/* GROUP: DOWNLOADS                                                   */}
-        {/* ══════════════════════════════════════════════════════════════════ */}
-        <div ref={secDownloads} style={{ scrollMarginTop: 80 }}>
-          <SectionGroupHeader
-            title="Downloads"
-            subtitle="Where downloaded video files are saved on disk"
-          />
-
-          <div style={{ marginBottom: 40 }}>
-            <div className="settings-section-title">Download Folder</div>
-            <div
-              style={{
-                fontSize: 13,
-                color: "var(--text3)",
-                marginBottom: 16,
-                lineHeight: 1.6,
-              }}
-            >
-              Downloaded videos will be saved here. Make sure the folder exists
-              and Streambert has write access to it.
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <input
-                className="apikey-input"
-                style={{ flex: 1, minWidth: 260, marginBottom: 0 }}
-                placeholder="/home/you/Movies"
-                value={downloadPath}
-                onChange={(e) => setDownloadPath(e.target.value)}
-              />
-              {isElectron && (
-                <button className="btn btn-secondary" onClick={pickFolder}>
-                  Browse …
-                </button>
-              )}
-              <button className="btn btn-primary" onClick={handleSavePath}>
-                Save
-              </button>
-            </div>
-            {saved && (
-              <div style={{ marginTop: 10, fontSize: 13, color: "#4caf50" }}>
-                ✓ Saved
-              </div>
-            )}
-            {!downloadPath && (
-              <div style={{ marginTop: 10, fontSize: 13, color: "var(--red)" }}>
-                ⚠ No download folder set - videos cannot be downloaded until you
-                set one.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════════════════════════════════ */}
         {/* GROUP: NOTIFICATIONS                                               */}
         {/* ══════════════════════════════════════════════════════════════════ */}
         <div ref={secNotifications} style={{ scrollMarginTop: 80 }}>
           <SectionGroupHeader
             title="Notifications"
-            subtitle="Desktop alerts for downloads and new episode releases"
+            subtitle="Desktop alerts for new episode releases"
           />
           <NotificationsSection />
         </div>
@@ -4352,7 +4195,7 @@ export default function SettingsPage({
         <div ref={secStorage} style={{ scrollMarginTop: 80 }}>
           <SectionGroupHeader
             title="Storage & Data"
-            subtitle="Clear cache, watch progress, downloads, or reset the entire app"
+            subtitle="Clear cache, watch progress, or reset the entire app"
           />
 
           <div
@@ -4403,25 +4246,6 @@ export default function SettingsPage({
                     window.__progressConfirmResolve = resolve;
                   })
                 }
-                danger
-              />
-            </div>
-
-            <div style={{ height: 1, background: "var(--border)" }} />
-
-            {/* Delete Downloads */}
-            <div style={{ padding: "22px 24px" }}>
-              <CleanRow
-                title="Delete All Downloads"
-                description="Permanently deletes all video files that were downloaded through Streambert and removes them from the download list. Only files downloaded through the app will be deleted, nothing else in your folder is touched."
-                buttonLabel="Delete All"
-                onAction={() =>
-                  new Promise((resolve) => {
-                    setShowDeleteDlConfirm(true);
-                    window.__deleteDlConfirmResolve = resolve;
-                  })
-                }
-                sizeLabel={formatBytes(sizes.downloads)}
                 danger
               />
             </div>
@@ -4481,8 +4305,7 @@ export default function SettingsPage({
                   >
                     Completely resets Streambert to factory defaults, clears all
                     settings, API Token, saved library, watch history/progress,
-                    and all cached data. Your downloaded video files will not be
-                    touched.
+                    and all cached data.
                   </div>
                 </div>
                 <div style={{ flexShrink: 0, paddingTop: 2 }}>

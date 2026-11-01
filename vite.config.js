@@ -21,7 +21,6 @@ export default defineConfig(({ mode }) => {
             settings: ["./src/pages/SettingsPage"],
             movie: ["./src/pages/MoviePage"],
             tv: ["./src/pages/TVPage"],
-            downloads: ["./src/pages/DownloadsPage"],
           },
         },
       },

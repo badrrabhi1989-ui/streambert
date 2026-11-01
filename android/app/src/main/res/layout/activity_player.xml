@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/player_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        app:surface_type="texture_view"
+        app:use_controller="false"
+        app:show_buffering="never"
+        app:shutter_background_color="#000000" />
+
+    <LinearLayout
+        android:id="@+id/player_status"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="72dp"
+        android:background="#CC100C09">
+
+        <ProgressBar
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:indeterminate="true" />
+
+        <TextView
+            android:id="@+id/player_status_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center"
+            android:textColor="#F6EFE6"
+            android:textSize="28sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/player_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:paddingLeft="64dp"
+        android:paddingRight="64dp"
+        android:paddingBottom="48dp"
+        android:paddingTop="36dp"
+        android:background="#CC100C09"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/player_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#F6EFE6"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/player_time"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#FFB088"
+            android:textSize="22sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="OK play/pause    Left / Right seek    Back close    CC subtitles"
+            android:textColor="#B7AA9E"
+            android:textSize="16sp" />
+    </LinearLayout>
+</FrameLayout>

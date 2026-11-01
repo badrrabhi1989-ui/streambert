@@ -112,10 +112,10 @@ assert.equal(debug.error, "disabled in packaged builds");
 const discord = await api.discordRpcSetEnabled(true);
 assert.equal(discord.supported, false);
 const downloader = await api.checkDownloader("android-builtin");
-assert.equal(downloader.exists, true);
-assert.equal(downloader.token, "android-builtin");
-assert.equal(store.get("streambert_downloaderFolder"), JSON.stringify("android-builtin"));
-assert.equal(store.get("streambert_downloadPath"), JSON.stringify("/movies"));
+assert.equal(downloader.exists, false);
+assert.equal(downloader.removed, true);
+assert.equal((await api.getDownloads()).length, 0);
+assert.equal((await api.runDownload({ m3u8Url: "https://cdn.example/a.m3u8" })).ok, false);
 
 const { trustedUpdate, shouldRunBackup } = sandbox.window.__sbTest;
 assert.ok(

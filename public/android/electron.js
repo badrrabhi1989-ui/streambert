@@ -8,6 +8,9 @@
   if (boot.television) {
     try {
       document.documentElement.classList.add("sb-tv");
+      document.documentElement.classList.add("emberlane");
+      var vp = document.querySelector('meta[name="viewport"]');
+      if (vp) vp.setAttribute("content", "width=1920, initial-scale=1, user-scalable=no");
     } catch (e) {}
   }
   var busListeners = new Map();
@@ -72,12 +75,15 @@
   window.__sbCall = function (method, args, timeoutMs) {
     return new Promise(function (resolve, reject) {
       var id = String(seq++);
-      var ms = timeoutMs || 120000;
-      var timer = setTimeout(function () {
-        if (!pending.has(id)) return;
-        pending.delete(id);
-        reject(new Error("Native timeout: " + method));
-      }, ms);
+      var ms = timeoutMs == null ? 120000 : timeoutMs;
+      var timer = null;
+      if (ms > 0) {
+        timer = setTimeout(function () {
+          if (!pending.has(id)) return;
+          pending.delete(id);
+          reject(new Error("Native timeout: " + method));
+        }, ms);
+      }
       pending.set(id, { resolve: resolve, reject: reject, timer: timer });
       try {
         window.sbNative.postMessage(
@@ -499,6 +505,9 @@
     },
     stopPhonePairing: function () {
       return call("stopPairing", {});
+    },
+    playNative: function (payload) {
+      return call("playNative", payload || {}, -1);
     },
     onPhoneKeysSaved: function (cb) {
       return on("phone-keys", function (data) {

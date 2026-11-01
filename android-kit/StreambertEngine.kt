@@ -17,6 +17,7 @@ import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.app.NotificationCompat
@@ -40,12 +41,11 @@ import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Native half of the Android port. The React UI talks to this object through
  * an origin-locked WebMessageListener (https://localhost only), so player
- * iframes cannot reach the filesystem or the downloader.
+ * pages cannot reach the filesystem.
  */
 object StreambertEngine {
     private const val TAG = "Streambert"
@@ -69,6 +69,7 @@ object StreambertEngine {
 
     private lateinit var app: Context
     private var activity: Activity? = null
+    @Volatile private var playbackId: String? = null
     private var webView: WebView? = null
     private var bridge: Bridge? = null
     private var reloaded = false
@@ -85,7 +86,6 @@ object StreambertEngine {
     @Volatile private var playerStart: Int = 0
 
     private val streamMeta = ConcurrentHashMap<String, JSONObject>()
-    private val downloads = ConcurrentHashMap<String, AtomicBoolean>()
     private val calls = ConcurrentHashMap<String, okhttp3.Call>()
 
     private var patterns: List<String> = emptyList()
@@ -105,12 +105,13 @@ object StreambertEngine {
     private var folderCallback: ((Uri?) -> Unit)? = null
     private var redeemCallback: ((JSONObject) -> Unit)? = null
 
-    private val downloader by lazy { HlsDownloader(http) }
-
     fun install(host: Activity, capBridge: Bridge) {
         app = host.applicationContext
         activity = host
         bridge = capBridge
+        if ((host.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
         webView = capBridge.webView
         userData = File(app.filesDir, "streambert").apply { mkdirs() }
         cacheDir = app.cacheDir
@@ -309,14 +310,14 @@ object StreambertEngine {
                 "playerStopped" -> complete(id, JSONObject().put("ok", true))
                 "getStreamMeta" -> complete(id, streamMeta[args.optString("url")] ?: JSONObject())
                 "setPlayerConfig" -> complete(id, setPlayerConfig(args))
-                "startDownload" -> startDownload(id, args)
+                "startDownload" -> fail(id, "Downloads have been removed")
                 "startPairing" -> startPairing(id)
+                "playNative" -> playNative(id, args)
                 "stopPairing" -> {
                     PairingServer.stop()
                     complete(id, JSONObject().put("ok", true))
                 }
                 "cancelDownload" -> {
-                    downloads[args.optString("id")]?.set(true)
                     calls.remove(args.optString("id"))?.cancel()
                     complete(id, JSONObject().put("ok", true))
                 }
@@ -587,6 +588,42 @@ object StreambertEngine {
         )
     }
 
+    fun finishPlayback(result: JSONObject) {
+        val id = playbackId ?: return
+        playbackId = null
+        complete(id, result)
+    }
+
+    private fun playNative(id: String, args: JSONObject) {
+        val previous = playbackId
+        if (previous != null) {
+            playbackId = null
+            complete(previous, JSONObject().put("ok", false).put("error", "replaced"))
+        }
+        playbackId = id
+        main.post {
+            val host = activity
+            if (host == null || host.isDestroyed) {
+                if (playbackId == id) playbackId = null
+                fail(id, "The app is not in the foreground.")
+                return@post
+            }
+            val intent = Intent(host, PlayerActivity::class.java)
+            intent.putExtra("title", args.optString("title"))
+            intent.putExtra("subtitle", args.optString("subtitle"))
+            intent.putExtra("sources", (args.optJSONArray("sources") ?: JSONArray()).toString())
+            intent.putExtra("startMs", args.optLong("startMs", 0L))
+            val direct = args.optString("directUrl")
+            if (direct.isNotBlank()) intent.putExtra("directUrl", direct)
+            try {
+                host.startActivity(intent)
+            } catch (e: Exception) {
+                if (playbackId == id) playbackId = null
+                fail(id, e.message ?: "Could not open the player")
+            }
+        }
+    }
+
     private fun startPairing(id: String) {
         try {
             val session = PairingServer.start { keys ->
@@ -612,53 +649,6 @@ object StreambertEngine {
         }
     }
 
-    private fun startDownload(id: String, args: JSONObject) {
-        val dlId = args.optString("id")
-        val url = args.optString("url")
-        val dest = args.optString("destDir")
-        val name = args.optString("fileName", "video")
-        if (dlId.isEmpty() || url.isEmpty() || dest.isEmpty()) {
-            fail(id, "Missing download parameters")
-            return
-        }
-        ensure(dest)
-        val cancel = AtomicBoolean(false)
-        downloads[dlId] = cancel
-        complete(id, JSONObject().put("ok", true))
-        io.execute {
-            startForeground("Downloading $name")
-            val headers = linkedMapOf(
-                "User-Agent" to args.optString("userAgent", UA),
-                "Referer" to args.optString("referer"),
-                "Origin" to args.optString("origin"),
-                "Accept" to "*/*",
-            )
-            try {
-                val result = downloader.download(url, headers, dest, name, cancel, ::openOut) { progress ->
-                    val obj = JSONObject().put("type", "download").put("id", dlId)
-                    progress.forEach { (k, v) -> if (v != null) obj.put(k, v) }
-                    push(obj)
-                }
-                push(
-                    JSONObject().put("type", "download").put("id", dlId)
-                        .put("status", "completed").put("progress", 100)
-                        .put("filePath", result.path).put("size", formatBytes(result.bytes))
-                        .put("lastMessage", "Download complete"),
-                )
-            } catch (e: Exception) {
-                if (!cancel.get()) {
-                    push(
-                        JSONObject().put("type", "download").put("id", dlId)
-                            .put("status", "error").put("lastMessage", e.message ?: "Download failed"),
-                    )
-                }
-            } finally {
-                downloads.remove(dlId)
-                if (downloads.isEmpty()) stopForeground()
-            }
-        }
-    }
-
     private fun downloadToFile(id: String, args: JSONObject) {
         val url = args.optString("url")
         val dest = args.optString("dest")
@@ -667,8 +657,6 @@ object StreambertEngine {
         val arr = args.optJSONArray("hosts")
         if (arr != null) for (i in 0 until arr.length()) hosts.add(arr.optString(i))
         io.execute {
-            val cancel = AtomicBoolean(false)
-            downloads[job] = cancel
             try {
                 val initialHost = android.net.Uri.parse(url).host ?: ""
                 if (hosts.isNotEmpty() && initialHost !in hosts) throw IllegalStateException("Unauthorized update source")
@@ -688,7 +676,7 @@ object StreambertEngine {
                         body.byteStream().use { input ->
                             val buf = ByteArray(256 * 1024)
                             while (true) {
-                                if (cancel.get()) throw IllegalStateException("Cancelled")
+                                if (call.isCanceled()) throw IllegalStateException("Cancelled")
                                 val n = input.read(buf)
                                 if (n < 0) break
                                 out.write(buf, 0, n)
@@ -704,10 +692,9 @@ object StreambertEngine {
                 }
                 complete(id, JSONObject().put("ok", true).put("path", dest))
             } catch (e: Exception) {
-                complete(id, JSONObject().put("ok", false).put("error", e.message ?: "Download failed"))
+                complete(id, JSONObject().put("ok", false).put("error", e.message ?: "Update download failed"))
             } finally {
                 calls.remove(job)
-                downloads.remove(job)
             }
         }
     }
@@ -1233,22 +1220,6 @@ object StreambertEngine {
         return walk(cacheDir) + walk(File(app.applicationInfo.dataDir, "app_webview"))
     }
 
-    private fun startForeground(text: String) {
-        val act = activity ?: return
-        val intent = Intent(act, DownloadService::class.java).putExtra("text", text)
-        try {
-            ContextCompat.startForegroundService(act, intent)
-        } catch (e: Exception) {
-            Log.w(TAG, "foreground", e)
-        }
-    }
-
-    private fun stopForeground() {
-        try {
-            activity?.stopService(Intent(app, DownloadService::class.java))
-        } catch (_: Exception) {}
-    }
-
     private fun loadAssets() {
         try {
             patterns = app.assets.open("blocklist.txt").bufferedReader().readLines()
@@ -1333,6 +1304,11 @@ object StreambertEngine {
     private class AppClient(bridge: Bridge) : BridgeWebViewClient(bridge) {
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
             return StreambertEngine.intercept(request) ?: super.shouldInterceptRequest(view, request)
+        }
+
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            Log.e(TAG, "render process gone crashed=${detail.didCrash()}")
+            return true
         }
     }
 }
