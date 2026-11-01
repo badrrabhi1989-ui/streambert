@@ -67,7 +67,14 @@
 }
 
 html,
-body,
+body {
+    height: 100%;
+    background: #040F2D;
+    color: var(--text);
+    font-family: var(--font-body);
+    overflow: hidden;
+}
+
 #root {
     height: 100%;
     background: var(--bg);
@@ -4056,4 +4063,129 @@ html[data-win-titlebar][data-maximized] .main {
 
 .episode-check-item:hover {
     color: var(--text) !important;
+}
+
+/* ── Android TV: 10-foot layout and remote focus ───────────────────────── */
+html.sb-tv {
+    --sidebar: 104px;
+    --tv-safe-y: 28px;
+    --tv-safe-x: 48px;
+}
+
+html.sb-tv .sidebar {
+    top: var(--tv-safe-y);
+    bottom: var(--tv-safe-y);
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+html.sb-tv .main {
+    height: calc(100vh - var(--tv-safe-y));
+    margin-top: var(--tv-safe-y);
+    padding-right: var(--tv-safe-x);
+    padding-bottom: var(--tv-safe-y);
+    scroll-padding-top: 24px;
+    scroll-padding-bottom: 48px;
+}
+
+html.sb-tv .sidebar-btn,
+html.sb-tv .sidebar-logo {
+    width: 58px;
+    height: 58px;
+}
+
+html.sb-tv .sidebar-btn svg {
+    width: 26px;
+    height: 26px;
+}
+
+html.sb-tv .sidebar-btn.gamepad-focused .tooltip,
+html.sb-tv .sidebar-btn:focus .tooltip {
+    opacity: 1;
+}
+
+html.sb-tv .btn {
+    min-height: 46px;
+    font-size: 16px;
+    padding: 10px 16px;
+}
+
+html.sb-tv .apikey-input,
+html.sb-tv .search-input {
+    min-height: 52px;
+    font-size: 18px;
+}
+
+html.sb-tv .apikey-box {
+    max-width: 880px;
+}
+
+html.sb-tv .gamepad-focused,
+html.sb-tv .gamepad-focused:focus {
+    outline: 4px solid #ffffff !important;
+    outline-offset: 6px !important;
+    box-shadow: 0 0 0 3px #e50914, 0 0 0 12px rgba(229, 9, 20, 0.55) !important;
+    border-radius: 8px;
+}
+
+html.sb-tv .card.gamepad-focused {
+    transform: translateY(-6px) scale(1.04);
+    z-index: 4;
+}
+
+.phone-pair {
+    margin-top: 18px;
+    text-align: left;
+}
+
+.phone-pair-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.phone-pair-copy {
+    font-size: 13px;
+    color: var(--text3);
+    line-height: 1.5;
+    margin: 0 0 12px;
+}
+
+.phone-pair-live {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.phone-pair-qr {
+    width: 220px;
+    height: 220px;
+    background: #fff;
+    border-radius: 8px;
+}
+
+.phone-pair-code {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: 0.28em;
+    color: #fff;
+}
+
+.phone-pair-url {
+    font-size: 16px;
+    word-break: break-all;
+    color: var(--text2);
+}
+
+.phone-pair-saved {
+    margin-top: 10px;
+    color: #48c774;
+    font-weight: 700;
+}
+
+.phone-pair-error {
+    margin-top: 10px;
+    color: #ff8a80;
 }

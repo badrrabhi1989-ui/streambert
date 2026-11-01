@@ -8,7 +8,6 @@ import {
   HistoryIcon,
   FilmIcon,
   SettingsIcon,
-  DownloadsQueueIcon,
   QuitIcon,
   BackIcon,
   HelpIcon,
@@ -19,7 +18,6 @@ export default function Sidebar({
   onNavigate,
   onSearch,
   savedList,
-  activeDownloads,
   onReorderSaved,
   onRemoveSaved,
   canGoBack,
@@ -129,14 +127,6 @@ export default function Sidebar({
         icon={<HistoryIcon />}
         label="Library & History"
       />
-      <SideBtn
-        active={page === "downloads"}
-        onClick={() => onNavigate("downloads")}
-        icon={<DownloadsQueueIcon />}
-        label="Downloads"
-        badge={activeDownloads > 0 ? activeDownloads : null}
-      />
-
       <div className="sidebar-sep" />
 
       <div className="sidebar-saved">

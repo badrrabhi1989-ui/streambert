@@ -3,11 +3,17 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="color-scheme" content="dark" />
         <title>Streambert</title>
         <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+        <style>
+            html, body { background: #040F2D !important; margin: 0; }
+        </style>
     </head>
     <body>
         <div id="root"></div>
+        <!-- No-op in Electron. On Android, installs window.electron before the app boots. -->
+        <script src="./android/boot.js"></script>
         <script type="module" src="/src/main.jsx"></script>
     </body>
 </html>

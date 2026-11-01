@@ -131,6 +131,69 @@ npm run dist
 > - **libcrypt.so.1 error:** `sudo pacman -S libxcrypt-compat`
 > - **http-parser dependency error:** `yay -S http-parser` (from AUR)
 
+## Android
+
+The Android app is the same Vite + React interface, loaded in a Capacitor WebView. Desktop-only Electron and Node APIs are implemented by `public/android/` (the `window.electron` bridge) and `android-kit/` (Kotlin: WebView client, HLS player, downloads, storage). The desktop Electron build is unchanged: the bridge does nothing unless the Android shell injected `window.__SB_BOOT` before the page loads.
+
+### Requirements
+
+- Node.js >= 22.12.0
+- JDK 21
+- Android SDK: platforms `android-35` and `android-36` (Media3 compiles against 36; the app still targets 35), build-tools `35.0.0`, and the command-line tools
+- `ANDROID_HOME` pointing at that SDK (for example `$HOME/android-sdk`)
+
+Accept the SDK licenses once, then install the packages:
+
+```bash
+yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses
+"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
+  "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+```
+
+### Build a debug APK
+
+```bash
+npm install
+npm run android:apk
+```
+
+`npm run android:apk` builds the web app, adds the Capacitor Android project on the first run, copies the native sources and the ad-block list, and runs `./gradlew assembleDebug`. The APK is written to:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Other scripts:
+
+```bash
+npm run android:test    # bridge surface vs Electron preload, plus parser checks
+npm run android:sync    # rebuild the web assets and copy them into the Android project
+```
+
+Install the debug APK with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`. Enable "Install unknown apps" for Streambert if you use the in-app updater later.
+
+### What stays the same, and what Android has to do differently
+
+The screens, settings, library, search, player layout, subtitle picker, backups, and ad-block stats use the same React code and the same `window.electron` method names as the desktop app. A few host capabilities cannot be the desktop implementation:
+
+- **Downloads.** Saving videos for offline playback is not part of the app. Subtitle lookup (Wyzie and SubDL) is unchanged.
+- **Discord Rich Presence.** There is no Discord desktop IPC socket. The settings toggle stays, and the calls return `{ supported: false }`.
+- **Pop-out player.** Picture-in-picture activity with a close button, instead of an always-on-top frameless window. Closing it reloads the player in the main view, same as desktop.
+- **User agent.** One desktop Chrome user agent for the whole WebView. Electron used a second "clean" agent only to strip its own token; Android has no Electron token.
+- **Window chrome.** `getPlatform()` is `android`, so the Windows/Linux custom titlebar is hidden. The page is laid out at a 1280px-wide desktop viewport and scaled to the screen.
+- **Updates.** The in-app updater looks for an `.apk` asset on the existing GitHub and Codeberg release hosts. Current upstream releases ship desktop installers, so the install button stays disabled until a release includes an APK.
+- **External player.** VLC (`org.videolan.vlc`) when it is installed, otherwise any app that handles the stream. "Show in folder" opens the file.
+- **Cookies.** The app and the embedded player share one WebView cookie jar. Desktop Electron kept `persist:player` and `persist:trailer` separate.
+- **HiAnime playback.** The local HLS page is served inside the WebView at `https://player.streambert.local` (the same hls.js player and `/proxy` URLs as the desktop local server).
+
+### Android TV
+
+The same APK runs on phones and Android TV. On a television the launcher name is **Reelix**: a 1920×1080 layout with a slim icon rail, a hero that follows the focused title, poster rows, and a details page with Play, Resume, and Play in external player. Seasons and episodes stay inside the TV safe area, and the pointer is hidden. The player overlay (OK or Down) chooses subtitles, audio, source, and quality, and can hand the stream to VLC, MX Player, or Just Player. Audio tracks are labeled by language, channels, and codec. Settings remembers a preferred audio language and the default player (built-in, external, or ask every time). Anime titles can offer separate subbed and dubbed versions.
+
+Playback does not use an embed iframe. Those pages often refuse to be framed, which left the old player on "Loading…". Reelix opens each provider as its own page, takes the HLS, DASH, or MP4 URL, and plays it in a Media3 player. The remote pauses, seeks, and toggles subtitles. If a source never produces a stream, the next one is tried. Vidrift is still first, then VidSrc, Vidfast, Vidlove, Aether, Vidnest, and Frembed.
+
+API keys can be entered from a phone. On the setup screen and in Settings, **Show pairing code** starts a one-time page on the TV's Wi-Fi address. The TV shows a QR code, the address, and a short code. The phone (on the same network) opens that page, pastes the TMDB token and any Wyzie or SubDL keys, and the TV stores them in the encrypted key store. The page rejects clients that are not on a private network, accepts one successful save, and then stops. It also stops after five bad attempts, when you cancel, or after three minutes.
+
 ## License
 This project is open-source software licensed under the GNU General Public License v3.0 [(GPL-3.0)](LICENSE).
 

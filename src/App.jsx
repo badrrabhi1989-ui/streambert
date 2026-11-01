@@ -33,6 +33,7 @@ import SetupScreen from "./components/SetupScreen";
 import CloseConfirmModal from "./components/CloseConfirmModal";
 import UpdateModal from "./components/UpdateModal";
 import { useGamepadNav } from "./utils/useGamepadNav";
+import { installTvRemote, tvHandleBack } from "./utils/tvRemote";
 
 // Lazy-loaded pages: each chunk is only downloaded when the user first visits
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -40,7 +41,6 @@ const MoviePage = lazy(() => import("./pages/MoviePage"));
 const TVPage = lazy(() => import("./pages/TVPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-const DownloadsPage = lazy(() => import("./pages/DownloadsPage"));
 import {
   checkForUpdatesWithFallback,
   DEFAULT_UPDATE_SOURCE,
@@ -52,10 +52,12 @@ export default function App() {
   const [apiKeyLoaded, setApiKeyLoaded] = useState(false);
   const [skipped, setSkipped] = useState(false);
   const [apiKeyStatus, setApiKeyStatus] = useState("checking"); // 'checking' | 'ok' | 'invalid_token' | 'unreachable'
-  const [page, setPage] = useState(() => storage.get("startPage") || "home");
+  const [page, setPage] = useState(() => {
+    const start = storage.get("startPage") || "home";
+    return start === "downloads" ? "home" : start;
+  });
   const [selected, setSelected] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
-  const [dlSearchOpen, setDlSearchOpen] = useState(false);
   const [librarySort, setLibrarySort] = useState(
     () => storage.get(STORAGE_KEYS.LIBRARY_SORT) || "manual",
   );
@@ -331,9 +333,6 @@ export default function App() {
     };
   }, [apiKeyLoaded]);
 
-  // ── Downloads state ──────────────────────────────────────────────────────
-  const [downloads, setDownloads] = useState([]);
-  const [highlightDownload, setHighlightDownload] = useState(null);
   const [closeConfirm, setCloseConfirm] = useState(null); // { count }
 
   // ── Load API key from secure storage on startup ──
@@ -347,6 +346,21 @@ export default function App() {
     return () => {
       mounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    if (!window.electron?.onPhoneKeysSaved) return;
+    const handler = window.electron.onPhoneKeysSaved(async (data) => {
+      const names = (data && data.keys) || [];
+      const list = Array.isArray(names) ? names : [];
+      if (list.includes("apikey")) {
+        const key = await secureStorage.get("apikey");
+        setApiKey(key || null);
+        setApiKeyLoaded(true);
+      }
+      window.dispatchEvent(new CustomEvent("streambert:phone-keys", { detail: data }));
+    });
+    return () => window.electron.offPhoneKeysSaved?.(handler);
   }, []);
 
   // ── Detect platform for Windows titlebar ──────────────────────────────────
@@ -406,100 +420,6 @@ export default function App() {
       });
     return () => controller.abort();
   }, [apiKey]);
-
-  // Load persisted downloads on startup + immediately prune missing files
-  useEffect(() => {
-    if (!window.electron) return;
-    let mounted = true;
-    window.electron.getDownloads().then(async (list) => {
-      if (!mounted || !Array.isArray(list)) return;
-
-      const pruned = [...list];
-      const toRemove = new Set();
-
-      await Promise.all(
-        pruned.map(async (d) => {
-          if (d.status !== "completed" || !d.filePath) return;
-          const exists = await window.electron.fileExists(d.filePath);
-          if (!exists) {
-            // File gone, remove from registry silently
-            window.electron.deleteDownload({ id: d.id, filePath: null });
-            toRemove.add(d.id);
-            return;
-          }
-          // Prune subtitle paths that no longer exist
-          if (
-            d.subtitlePaths?.length > 0 &&
-            window.electron.pruneSubtitlePaths
-          ) {
-            const res = await window.electron.pruneSubtitlePaths(d.id);
-            if (res?.ok) d.subtitlePaths = res.subtitlePaths;
-          }
-        }),
-      );
-
-      if (mounted) setDownloads(pruned.filter((d) => !toRemove.has(d.id)));
-    });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  // Listen for live progress events from main process
-  useEffect(() => {
-    if (!window.electron) return;
-    const handler = window.electron.onDownloadProgress((update) => {
-      // ── Desktop notification ──────────────────────
-      if (
-        update.status === "completed" &&
-        storage.get(STORAGE_KEYS.NOTIFY_DOWNLOAD_COMPLETE) !== false &&
-        window.electron.showNotification
-      ) {
-        window.electron.showNotification({
-          title: "Download complete",
-          body: update.name || "Your download has finished.",
-          silent: false,
-        });
-      }
-
-      setDownloads((prev) => {
-        const idx = prev.findIndex((d) => d.id === update.id);
-        if (idx === -1) {
-          // Unknown id: either the entry was deleted (stale event after SIGKILL)
-          // or a genuine race on first event.
-          if (!update.name) return prev;
-          return [update, ...prev];
-        }
-        const updated = [...prev];
-        updated[idx] = { ...updated[idx], ...update };
-        return updated;
-      });
-    });
-    return () => window.electron.offDownloadProgress(handler);
-  }, []);
-
-  const handleDownloadStarted = useCallback((newEntry) => {
-    setDownloads((prev) => {
-      // Guard: if a progress event already added this id (race), just update it
-      const idx = prev.findIndex((d) => d.id === newEntry.id);
-      if (idx !== -1) {
-        const updated = [...prev];
-        updated[idx] = { ...updated[idx], ...newEntry };
-        return updated;
-      }
-      return [newEntry, ...prev];
-    });
-  }, []);
-
-  const handleDeleteDownload = useCallback((id) => {
-    setDownloads((prev) => prev.filter((d) => d.id !== id));
-  }, []);
-
-  // Active download count for sidebar badge
-  const activeDownloadCount = useMemo(
-    () => downloads.filter((d) => d.status === "downloading").length,
-    [downloads],
-  );
 
   // ── Trending, single shared fetch fn avoids code duplication ────────────
   // Results are cached in localStorage for 30 min to avoid redundant API calls
@@ -661,6 +581,9 @@ export default function App() {
     selectedRef.current = selected;
   }, [selected]);
 
+  const navStackRef = useRef(navStack);
+  navStackRef.current = navStack;
+
   const navigateBack = useCallback(() => {
     setNavStack((prev) => {
       if (prev.length === 0) return prev;
@@ -695,12 +618,6 @@ export default function App() {
         e.preventDefault();
         setShowSearch(true);
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        if (pageRef.current === "downloads") {
-          e.preventDefault();
-          setDlSearchOpen(true);
-        }
-      }
       if (e.key === "Escape") {
         setShowSearch(false);
         setShowShortcuts(false);
@@ -724,6 +641,26 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, [navigateBack]);
+
+  useEffect(() => {
+    window.__streambertHandleBack = () => {
+      const tv = tvHandleBack();
+      if (tv) return tv;
+      if (navStackRef.current.length > 0) {
+        navigateBack();
+        return "handled";
+      }
+      if (typeof window.__streambertRequestClose === "function") {
+        return window.__streambertRequestClose();
+      }
+      return "close";
+    };
+    const stopRemote = installTvRemote();
+    return () => {
+      stopRemote();
+      delete window.__streambertHandleBack;
+    };
   }, [navigateBack]);
 
   // ── Controller / gamepad navigation ─────────────────────────────────────
@@ -977,14 +914,6 @@ export default function App() {
   }, []);
 
   // Stable handler
-  const handleGoToDownloads = useCallback(
-    (id) => {
-      setHighlightDownload(id || null);
-      navigate("downloads");
-    },
-    [navigate],
-  );
-
   if (!apiKeyLoaded) return null; // wait for secure storage to resolve
   if (!apiKey && !skipped)
     return <SetupScreen onSave={saveApiKey} onSkip={() => setSkipped(true)} />;
@@ -1000,7 +929,6 @@ export default function App() {
           onNavigate={navigate}
           onSearch={() => setShowSearch(true)}
           savedList={savedList}
-          activeDownloads={activeDownloadCount}
           onReorderSaved={handleReorderSaved}
           onRemoveSaved={toggleSave}
           canGoBack={navStack.length > 0}
@@ -1083,12 +1011,9 @@ export default function App() {
                 onSettings={(section) =>
                   navigate("settings", { section: section || null })
                 }
-                onDownloadStarted={handleDownloadStarted}
                 watched={watched}
                 onMarkWatched={markWatched}
                 onMarkUnwatched={markUnwatched}
-                downloads={downloads}
-                onGoToDownloads={handleGoToDownloads}
                 onSelect={handleSelectResult}
               />
             )}
@@ -1106,12 +1031,9 @@ export default function App() {
                 onSettings={(section) =>
                   navigate("settings", { section: section || null })
                 }
-                onDownloadStarted={handleDownloadStarted}
                 watched={watched}
                 onMarkWatched={markWatched}
                 onMarkUnwatched={markUnwatched}
-                downloads={downloads}
-                onGoToDownloads={handleGoToDownloads}
                 onEpisodeChange={setWatchingEpisode}
               />
             )}
@@ -1133,31 +1055,6 @@ export default function App() {
                 apiKey={apiKey}
                 onChangeApiKey={changeApiKey}
                 initialSection={selected?.section}
-              />
-            )}
-            {page === "downloads" && (
-              <DownloadsPage
-                downloads={downloads}
-                onDeleteDownload={handleDeleteDownload}
-                onHistory={addHistory}
-                onSaveProgress={saveProgress}
-                progress={progress}
-                watched={watched}
-                onMarkWatched={markWatched}
-                onMarkUnwatched={markUnwatched}
-                highlightId={highlightDownload}
-                onClearHighlight={() => setHighlightDownload(null)}
-                onSelect={handleSelectResult}
-                searchOpen={dlSearchOpen}
-                onSearchClose={() => setDlSearchOpen(false)}
-                onSettings={(section) =>
-                  navigate("settings", { section: section || null })
-                }
-                onUpdateDownload={(id, updates) =>
-                  setDownloads((prev) =>
-                    prev.map((d) => (d.id === id ? { ...d, ...updates } : d)),
-                  )
-                }
               />
             )}
           </Suspense>
@@ -1228,7 +1125,6 @@ export default function App() {
         {showUpdateModal && updateBanner && (
           <UpdateModal
             updateInfo={updateBanner}
-            activeDownloads={activeDownloadCount}
             onClose={() => setShowUpdateModal(false)}
           />
         )}

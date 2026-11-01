@@ -1,0 +1,15 @@
+{
+  "appId": "com.truelockmc.streambert",
+  "appName": "Reelix",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#040F2D"
+  },
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost"
+  }
+}

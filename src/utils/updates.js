@@ -91,6 +91,7 @@ export async function checkForUpdates(source = DEFAULT_UPDATE_SOURCE) {
     else if (name.endsWith(".exe")) assets.exe = downloadUrl;
     else if (name.endsWith(".pacman")) assets.pacman = downloadUrl;
     else if (name.endsWith(".dmg")) assets.dmg = downloadUrl;
+    else if (name.endsWith(".apk")) assets.apk = downloadUrl;
   }
 
   return {

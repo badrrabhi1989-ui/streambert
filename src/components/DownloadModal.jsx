@@ -531,7 +531,7 @@ export default function DownloadModal({
         res?.ok
           ? {
               ok: true,
-              text: `✓ Opened in ${res.player === "vlc" ? "VLC" : "mpv"}`,
+              text: `✓ Opened in ${res.player === "vlc" ? "VLC" : res.player === "android" ? "an external player" : "mpv"}`,
             }
           : { ok: false, text: res?.error || "Could not open external player" },
       );

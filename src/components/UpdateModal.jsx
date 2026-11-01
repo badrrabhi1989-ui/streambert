@@ -512,6 +512,7 @@ export default function UpdateModal({
       pacman: ".pacman (Arch)",
       exe: "Windows installer",
       dmg: "macOS installer (Universal)",
+      apk: "Android APK",
     }[format] || "installer";
 
   const busy = phase === "downloading" || phase === "installing";

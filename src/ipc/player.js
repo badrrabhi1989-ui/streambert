@@ -438,6 +438,16 @@ function register(getMainWindow, { writeSecretMigration }) {
   });
 
   ipcMain.handle("get-platform", () => process.platform);
+  ipcMain.handle("is-television", () => false);
+  ipcMain.handle("start-phone-pairing", () => ({
+    ok: false,
+    error: "Phone pairing is only available on Android.",
+  }));
+  ipcMain.handle("stop-phone-pairing", () => ({ ok: true }));
+  ipcMain.handle("play-native", () => ({
+    ok: false,
+    error: "Native playback is only available on Android.",
+  }));
 
   // ── Get video duration via ffprobe ────────────────────────────────────────
   ipcMain.handle("get-video-duration", async (_, filePath) => {
