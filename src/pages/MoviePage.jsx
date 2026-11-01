@@ -561,6 +561,14 @@ export default function MoviePage({
   }, [playing, gamepadEnabled]);
 
   useEffect(() => {
+    if (!playing) return undefined;
+    window.__streambertClosePlayer = () => setPlaying(false);
+    return () => {
+      if (window.__streambertClosePlayer) delete window.__streambertClosePlayer;
+    };
+  }, [playing]);
+
+  useEffect(() => {
     const wv = webviewRef.current;
     if (!wv || !playing || !gamepadEnabled) return;
 

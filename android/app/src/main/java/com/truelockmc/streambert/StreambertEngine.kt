@@ -204,6 +204,8 @@ object StreambertEngine {
         s.allowFileAccess = false
         s.allowContentAccess = true
         s.javaScriptCanOpenWindowsAutomatically = false
+        view.isFocusable = true
+        view.isFocusableInTouchMode = true
         val cookies = CookieManager.getInstance()
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(view, true)
@@ -249,7 +251,14 @@ object StreambertEngine {
         o.put("movies", moviesDir.absolutePath)
         o.put("tmp", tmpDir.absolutePath)
         o.put("downloadsJson", readSmall(File(userData, "downloads.json")))
+        o.put("television", isTelevision())
         return "window.__SB_BOOT=" + o.toString().replace("<", "\\u003c") + ";"
+    }
+
+    private fun isTelevision(): Boolean {
+        val ui = app.getSystemService(Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        if (ui?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION) return true
+        return app.packageManager.hasSystemFeature("android.software.leanback")
     }
 
     private fun handle(raw: String) {
@@ -301,6 +310,11 @@ object StreambertEngine {
                 "getStreamMeta" -> complete(id, streamMeta[args.optString("url")] ?: JSONObject())
                 "setPlayerConfig" -> complete(id, setPlayerConfig(args))
                 "startDownload" -> startDownload(id, args)
+                "startPairing" -> startPairing(id)
+                "stopPairing" -> {
+                    PairingServer.stop()
+                    complete(id, JSONObject().put("ok", true))
+                }
                 "cancelDownload" -> {
                     downloads[args.optString("id")]?.set(true)
                     calls.remove(args.optString("id"))?.cancel()
@@ -571,6 +585,31 @@ object StreambertEngine {
             "playerUrl",
             "https://$PLAYER_HOST/player?t=$playerToken",
         )
+    }
+
+    private fun startPairing(id: String) {
+        try {
+            val session = PairingServer.start { keys ->
+                val prefs = securePrefs().edit()
+                for ((k, v) in keys) prefs.putString(k, v)
+                prefs.apply()
+                val names = org.json.JSONArray()
+                keys.keys.forEach { names.put(it) }
+                push(JSONObject().put("type", "phone-keys").put("keys", names))
+            }
+            complete(
+                id,
+                JSONObject()
+                    .put("ok", true)
+                    .put("url", session.url)
+                    .put("code", session.code)
+                    .put("host", session.host)
+                    .put("port", session.port)
+                    .put("expiresAt", session.expiresAt),
+            )
+        } catch (e: Exception) {
+            complete(id, JSONObject().put("ok", false).put("error", e.message ?: "Pairing unavailable"))
+        }
     }
 
     private fun startDownload(id: String, args: JSONObject) {

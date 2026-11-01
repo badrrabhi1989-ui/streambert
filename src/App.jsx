@@ -33,6 +33,7 @@ import SetupScreen from "./components/SetupScreen";
 import CloseConfirmModal from "./components/CloseConfirmModal";
 import UpdateModal from "./components/UpdateModal";
 import { useGamepadNav } from "./utils/useGamepadNav";
+import { installTvRemote, tvHandleBack } from "./utils/tvRemote";
 
 // Lazy-loaded pages: each chunk is only downloaded when the user first visits
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -349,6 +350,21 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!window.electron?.onPhoneKeysSaved) return;
+    const handler = window.electron.onPhoneKeysSaved(async (data) => {
+      const names = (data && data.keys) || [];
+      const list = Array.isArray(names) ? names : [];
+      if (list.includes("apikey")) {
+        const key = await secureStorage.get("apikey");
+        setApiKey(key || null);
+        setApiKeyLoaded(true);
+      }
+      window.dispatchEvent(new CustomEvent("streambert:phone-keys", { detail: data }));
+    });
+    return () => window.electron.offPhoneKeysSaved?.(handler);
+  }, []);
+
   // ── Detect platform for Windows titlebar ──────────────────────────────────
   useEffect(() => {
     if (!window.electron?.getPlatform) return;
@@ -661,6 +677,9 @@ export default function App() {
     selectedRef.current = selected;
   }, [selected]);
 
+  const navStackRef = useRef(navStack);
+  navStackRef.current = navStack;
+
   const navigateBack = useCallback(() => {
     setNavStack((prev) => {
       if (prev.length === 0) return prev;
@@ -724,6 +743,26 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, [navigateBack]);
+
+  useEffect(() => {
+    window.__streambertHandleBack = () => {
+      const tv = tvHandleBack();
+      if (tv) return tv;
+      if (navStackRef.current.length > 0) {
+        navigateBack();
+        return "handled";
+      }
+      if (typeof window.__streambertRequestClose === "function") {
+        return window.__streambertRequestClose();
+      }
+      return "close";
+    };
+    const stopRemote = installTvRemote();
+    return () => {
+      stopRemote();
+      delete window.__streambertHandleBack;
+    };
   }, [navigateBack]);
 
   // ── Controller / gamepad navigation ─────────────────────────────────────

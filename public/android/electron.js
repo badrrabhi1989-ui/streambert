@@ -5,6 +5,11 @@
 (function () {
   var boot = window.__SB_BOOT || {};
   var UA = boot.ua || "";
+  if (boot.television) {
+    try {
+      document.documentElement.classList.add("sb-tv");
+    } catch (e) {}
+  }
   var busListeners = new Map();
 
   function on(name, cb) {
@@ -59,6 +64,8 @@
       emit("update-progress", { percent: msg.percent, label: msg.label });
     } else if (msg.type === "maximized") {
       emit("window-maximized", !!msg.value);
+    } else if (msg.type === "phone-keys") {
+      emit("phone-keys", msg);
     }
   };
 
@@ -483,6 +490,23 @@
     },
     getPlatform: function () {
       return Promise.resolve("android");
+    },
+    isTelevision: function () {
+      return Promise.resolve(!!boot.television);
+    },
+    startPhonePairing: function () {
+      return call("startPairing", {});
+    },
+    stopPhonePairing: function () {
+      return call("stopPairing", {});
+    },
+    onPhoneKeysSaved: function (cb) {
+      return on("phone-keys", function (data) {
+        cb(data);
+      });
+    },
+    offPhoneKeysSaved: function (h) {
+      off("phone-keys", h);
     },
     onWindowMaximize: function (cb) {
       return on("window-maximized", function (v) {

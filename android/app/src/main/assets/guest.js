@@ -84,9 +84,59 @@
     return null;
   };
 
+  function mediaToast(msg) {
+    var el = document.getElementById("sb-media-toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "sb-media-toast";
+      el.style.cssText =
+        "position:fixed;bottom:48px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.82);color:#fff;padding:12px 22px;border-radius:10px;font:700 22px system-ui,sans-serif;z-index:2147483647;pointer-events:none";
+      document.documentElement.appendChild(el);
+    }
+    el.textContent = msg;
+    clearTimeout(el._t);
+    el._t = setTimeout(function () {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 900);
+  }
+
+  function applyMedia(action, delta) {
+    var v = document.querySelector("video");
+    if (!v) return false;
+    if (action === "playpause") {
+      if (v.paused) {
+        v.play();
+        mediaToast("Play");
+      } else {
+        v.pause();
+        mediaToast("Pause");
+      }
+    } else if (action === "play") {
+      v.play();
+      mediaToast("Play");
+    } else if (action === "pause") {
+      v.pause();
+      mediaToast("Pause");
+    } else if (action === "seek") {
+      var next = Math.max(0, Math.min(v.duration || 1e9, v.currentTime + (delta || 0)));
+      v.currentTime = next;
+      mediaToast((delta > 0 ? "+" : "") + delta + "s");
+    }
+    return true;
+  }
+
   window.addEventListener("message", function (e) {
     var d = e.data;
     if (!d || typeof d !== "object") return;
+    if (d.type === "sb-media") {
+      for (var m = 0; m < window.frames.length; m++) {
+        try {
+          window.frames[m].postMessage(d, "*");
+        } catch (err) {}
+      }
+      applyMedia(d.action, d.delta);
+      return;
+    }
     if (d.type === "sb-hello" && d.token) {
       token = d.token;
       for (var i = 0; i < window.frames.length; i++) {

@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { tvRemoteAction } from "../src/utils/tvRemoteActions.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -100,6 +101,10 @@ const extra = Object.keys(api).filter((name) => !expected.includes(name));
 assert.deepEqual(extra, [], `Android bridge has methods Electron does not: ${extra.join(", ")}`);
 
 assert.equal(await api.getPlatform(), "android");
+assert.equal(await api.isTelevision(), false);
+assert.equal(typeof api.startPhonePairing, "function");
+assert.equal(typeof api.stopPhonePairing, "function");
+assert.equal(typeof api.onPhoneKeysSaved, "function");
 assert.equal(await api.detectUpdateFormat(), "apk");
 assert.equal(await api.getAppVersion(), "2.7.0");
 const debug = await api.debugHiAnime({});
@@ -170,5 +175,21 @@ assert.match(boot, /window\.__SB_BOOT/);
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 assert.match(html, /android\/boot\.js/);
 assert.ok(html.indexOf("android/boot.js") < html.indexOf("/src/main.jsx"));
+
+assert.deepEqual(tvRemoteAction({ key: "ArrowLeft", playerOpen: false, controlsFocused: false, typing: false }), { type: "move", dir: "left" });
+assert.deepEqual(tvRemoteAction({ key: "ArrowRight", playerOpen: true, controlsFocused: false, typing: false }), { type: "seek", delta: 10 });
+assert.deepEqual(tvRemoteAction({ key: "ArrowLeft", playerOpen: true, controlsFocused: false, typing: true }), null);
+assert.deepEqual(tvRemoteAction({ key: "Enter", playerOpen: true, controlsFocused: false, typing: false }), { type: "playpause" });
+assert.deepEqual(tvRemoteAction({ key: "Enter", playerOpen: true, controlsFocused: true, typing: false }), { type: "activate" });
+assert.deepEqual(tvRemoteAction({ key: "MediaPlayPause", playerOpen: true, controlsFocused: false, typing: false }), { type: "playpause" });
+assert.deepEqual(tvRemoteAction({ key: "seek:-10", playerOpen: true, controlsFocused: false, typing: false }), { type: "seek", delta: -10 });
+assert.deepEqual(tvRemoteAction({ key: "Escape", playerOpen: false, controlsFocused: false, typing: false }), { type: "back" });
+assert.deepEqual(tvRemoteAction({ key: "ArrowDown", playerOpen: false, controlsFocused: false, typing: false }), { type: "move", dir: "down" });
+
+const manifest = fs.readFileSync(path.join(root, "android", "app", "src", "main", "AndroidManifest.xml"), "utf8");
+assert.match(manifest, /android.software.leanback/);
+assert.match(manifest, /android.hardware.touchscreen" android:required="false"/);
+assert.match(manifest, /LEANBACK_LAUNCHER/);
+assert.match(manifest, /@drawable\/tv_banner/);
 
 console.log(`Android bridge matches ${expected.length} preload methods`);

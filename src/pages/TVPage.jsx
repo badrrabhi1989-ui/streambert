@@ -1594,7 +1594,11 @@ export default function TVPage({
 
   useEffect(() => {
     setPlayerGamepadActive(gamepadEnabled && playing);
-    return () => setPlayerGamepadActive(false);
+    if (playing) window.__streambertClosePlayer = () => setPlaying(false);
+    return () => {
+      setPlayerGamepadActive(false);
+      if (window.__streambertClosePlayer) delete window.__streambertClosePlayer;
+    };
   }, [playing, gamepadEnabled]);
 
   useEffect(() => {

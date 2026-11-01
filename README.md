@@ -186,6 +186,12 @@ The screens, settings, library, search, player layout, subtitle picker, backups,
 - **Cookies.** The app and the embedded player share one WebView cookie jar. Desktop Electron kept `persist:player` and `persist:trailer` separate.
 - **HiAnime playback.** The local HLS page is served inside the WebView at `https://player.streambert.local` (the same hls.js player and `/proxy` URLs as the desktop local server).
 
+### Android TV
+
+The same APK runs on phones and Android TV. The manifest does not require a touchscreen, and the activity is a leanback launcher target with a TV banner. On a television the page adds a 10-foot safe area, a high-contrast focus ring, and D-pad navigation across the sidebar, posters, search, library, details, settings, dialogs, and the player. The remote Back button closes a dialog, leaves the player, then steps back through screens. Play/pause, left/right seek, and media keys go to the video while it is open.
+
+API keys can be entered from a phone. On the setup screen and in Settings, **Show pairing code** starts a one-time page on the TV's Wi-Fi address. The TV shows a QR code, the address, and a short code. The phone (on the same network) opens that page, pastes the TMDB token and any Wyzie or SubDL keys, and the TV stores them in the encrypted key store. The page rejects clients that are not on a private network, accepts one successful save, and then stops. It also stops after five bad attempts, when you cancel, or after three minutes.
+
 ## License
 This project is open-source software licensed under the GNU General Public License v3.0 [(GPL-3.0)](LICENSE).
 

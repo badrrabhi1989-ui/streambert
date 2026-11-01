@@ -64,10 +64,16 @@ function isModalRoot(el) {
 }
 
 function getScopeRoot() {
-  const overlays = Array.from(
-    document.querySelectorAll('[class*="overlay"]'),
-  ).filter((el) => isVisible(el) && isModalRoot(el));
+  const overlays = [];
+  for (const el of document.querySelectorAll("div")) {
+    if (isVisible(el) && isModalRoot(el)) overlays.push(el);
+  }
   if (overlays.length === 0) return document;
+  overlays.sort((a, b) => {
+    const za = parseInt(getComputedStyle(a).zIndex, 10) || 0;
+    const zb = parseInt(getComputedStyle(b).zIndex, 10) || 0;
+    return za - zb;
+  });
   return overlays[overlays.length - 1];
 }
 

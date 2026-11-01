@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { StreambertLogo, PlayIcon } from "./Icons";
+import PhoneKeyPairing from "./PhoneKeyPairing";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
@@ -189,6 +190,8 @@ export default function SetupScreen({ onSave, onSkip }) {
             </>
           )}
         </button>
+
+        <PhoneKeyPairing />
 
         {onSkip && (
           <button

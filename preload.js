@@ -160,6 +160,15 @@ contextBridge.exposeInMainWorld("electron", {
   windowClose: () => ipcRenderer.invoke("window-close"),
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
   getPlatform: () => ipcRenderer.invoke("get-platform"),
+  isTelevision: () => ipcRenderer.invoke("is-television"),
+  startPhonePairing: () => ipcRenderer.invoke("start-phone-pairing"),
+  stopPhonePairing: () => ipcRenderer.invoke("stop-phone-pairing"),
+  onPhoneKeysSaved: (cb) => {
+    const h = (_, data) => cb(data);
+    ipcRenderer.on("phone-keys-saved", h);
+    return h;
+  },
+  offPhoneKeysSaved: (h) => ipcRenderer.removeListener("phone-keys-saved", h),
   // Push events: main process emits "window-maximized" with a boolean payload
   onWindowMaximize: (cb) => {
     const h = (_, v) => cb(v);

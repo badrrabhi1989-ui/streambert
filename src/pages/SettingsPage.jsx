@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import UpdateModal from "../components/UpdateModal";
+import PhoneKeyPairing from "../components/PhoneKeyPairing";
 import {
   storage,
   STORAGE_KEYS,
@@ -1951,12 +1952,17 @@ function SubtitleSettingsSection() {
 
   // Load keys from secure storage
   useEffect(() => {
-    secureStorage.get(STORAGE_KEYS.SUBDL_API_KEY).then((val) => {
-      if (val) setSubdlApiKey(val);
-    });
-    secureStorage.get(STORAGE_KEYS.WYZIE_API_KEY).then((val) => {
-      if (val) setWyzieApiKey(val);
-    });
+    const load = () => {
+      secureStorage.get(STORAGE_KEYS.SUBDL_API_KEY).then((val) => {
+        if (val) setSubdlApiKey(val);
+      });
+      secureStorage.get(STORAGE_KEYS.WYZIE_API_KEY).then((val) => {
+        if (val) setWyzieApiKey(val);
+      });
+    };
+    load();
+    window.addEventListener("streambert:phone-keys", load);
+    return () => window.removeEventListener("streambert:phone-keys", load);
   }, []);
 
   const hasSubdlKey = subdlApiKey.trim().length > 0;
@@ -3688,6 +3694,7 @@ export default function SettingsPage({
                 Change API Token
               </button>
             </div>
+            <PhoneKeyPairing />
           </div>
 
           <Divider />

@@ -180,6 +180,12 @@
       return this._id;
     }
 
+    postToGuest(message) {
+      try {
+        this._iframe && this._iframe.contentWindow && this._iframe.contentWindow.postMessage(message, "*");
+      } catch (e) {}
+    }
+
     executeJavaScript(code) {
       var iframe = this._iframe;
       if (!iframe || !iframe.contentWindow) {

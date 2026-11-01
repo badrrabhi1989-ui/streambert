@@ -3,10 +3,12 @@ package com.truelockmc.streambert
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
 import android.webkit.WebView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import com.getcapacitor.BridgeActivity
+import org.json.JSONObject
 
 class MainActivity : BridgeActivity() {
     val folderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
@@ -19,19 +21,48 @@ class MainActivity : BridgeActivity() {
         window.navigationBarColor = Color.parseColor("#0a0a0a")
         WebView.setWebContentsDebuggingEnabled(true)
         StreambertEngine.install(this, bridge)
+        bridge.webView.requestFocus()
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
                     val view = bridge.webView
                     view.evaluateJavascript(
-                        "(function(){return window.__streambertRequestClose?window.__streambertRequestClose():'close'})()",
+                        "(function(){if(window.__streambertHandleBack)return window.__streambertHandleBack();return window.__streambertRequestClose?window.__streambertRequestClose():'close'})()",
                     ) { result ->
-                        if (result != null && result.contains("pending")) return@evaluateJavascript
+                        val text = result ?: ""
+                        if (text.contains("handled") || text.contains("pending")) return@evaluateJavascript
                         finish()
                     }
                 }
             },
         )
+    }
+
+    override fun onDestroy() {
+        PairingServer.stop()
+        super.onDestroy()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            val command = when (event.keyCode) {
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> "playpause"
+                KeyEvent.KEYCODE_MEDIA_PLAY -> "play"
+                KeyEvent.KEYCODE_MEDIA_PAUSE -> "pause"
+                KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_NEXT -> "seek:30"
+                KeyEvent.KEYCODE_MEDIA_REWIND, KeyEvent.KEYCODE_MEDIA_PREVIOUS -> "seek:-10"
+                else -> null
+            }
+            if (command != null) {
+                val quoted = JSONObject.quote(command)
+                bridge.webView.evaluateJavascript(
+                    "window.__streambertMediaKey&&window.__streambertMediaKey($quoted)",
+                    null,
+                )
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 }
